@@ -49,18 +49,16 @@ app.post("/login", (req, res) => {
   if (!db) {
     return res.status(500).json({
       success: false,
-      message: "Database not connected"
+      message: "Database not connected",
     });
   }
 
   const { User_Mail, Password, Role, Department } = req.body;
 
-  console.log("🔐 Login request:", req.body);
-
   if (!User_Mail || !Password || !Role || !Department) {
     return res.json({
       success: false,
-      message: "All fields required"
+      message: "All fields required",
     });
   }
 
@@ -73,56 +71,148 @@ app.post("/login", (req, res) => {
     LIMIT 1
   `;
 
-  db.query(
-    sql,
-    [User_Mail, Password, Role, Department],
-    (err, results) => {
-      if (err) {
-        console.error("❌ Login DB error:", err.message);
-        return res.status(500).json({
-          success: false,
-          message: "Database error"
-        });
-      }
-
-      if (!results || results.length === 0) {
-        return res.json({
-          success: false,
-          message: "Invalid credentials"
-        });
-      }
-
-      const user = results[0];
-
-      /* ======================
-         REDIRECT URL LOGIC
-      ====================== */
-      const FRONTEND_BASE_URL = "https://pixeltruth.com/mis";
-
-      const role = user.Role;
-      const department = user.Department;
-
-      let redirectUrl = `${FRONTEND_BASE_URL}/${department}/dashboard.html`;
-
-      if (role === "HR") {
-        redirectUrl = `${FRONTEND_BASE_URL}/HR/${department}/HR_dashboard.html`;
-      } 
-      else if (role === "Team_Lead") {
-        redirectUrl = `${FRONTEND_BASE_URL}/TL/${department}/TL_dashboard.html`;
-      }
-
-      return res.json({
-        success: true,
-        redirectUrl,
-        user: {
-          User_Name: user.User_Name,
-          User_Mail: user.User_Mail,
-          Role: user.Role,
-          Department: user.Department
-        }
+  db.query(sql, [User_Mail, Password, Role, Department], (err, results) => {
+    if (err) {
+      console.error("❌ Login DB error:", err.message);
+      return res.status(500).json({
+        success: false,
+        message: "Database error",
       });
     }
-  );
+
+    if (!results || results.length === 0) {
+      return res.json({
+        success: false,
+        message: "Invalid credentials",
+      });
+    }
+
+    const user = results[0];
+
+    /* ======================
+       REDIRECT URL LOGIC
+    ====================== */
+    const FRONTEND_BASE_URL = "https://pixeltruth.com/mis";
+    let redirectUrl = `${FRONTEND_BASE_URL}/${user.Department}/dashboard.html`;
+
+    if (user.Role === "HR") {
+      redirectUrl = `${FRONTEND_BASE_URL}/HR/${user.Department}/HR_dashboard.html`;
+    } else if (user.Role === "Team_Lead") {
+      redirectUrl = `${FRONTEND_BASE_URL}/TL/${user.Department}/TL_dashboard.html`;
+    }
+
+    return res.json({
+      success: true,
+      redirectUrl,
+      user: {
+        User_Name: user.User_Name,
+        User_Mail: user.User_Mail,
+        Role: user.Role,
+        Department: user.Department,
+        Employee_ID: user.Employee_ID || null,
+        Designation: user.Designation || null,
+        Phone_Number: user.Phone_Number || null,
+        Reporting_Person: user.Reporting_Person || null,
+      },
+    });
+  });
+});
+
+{
+  date,
+
+  // Website Audit
+  Website_Audit_Brand,
+  Website_Audit_Type_Of_Task,
+  Website_Audit_hours,
+  Website_Audit_minutes,
+  Website_Audit_Remark,
+  Website_Audit_Status,
+
+  // Social Media Audit
+  Social_Media_Audit_Brand,
+  Social_Media_Audit_Type_Of_Task,
+  Social_Media_Audit_hours,
+  Social_Media_Audit_minutes,
+  Social_Media_Audit_Remark,
+  Social_Media_Audit_Status,
+
+  // Stationary
+  Stationary_Brand,
+  Stationary_Project,
+  Stationary_Count,
+  Stationary_hours,
+  Stationary_minutes,
+  Stationary_Remark,
+
+  // Real Estimated
+  Real_estimated_Brand,
+  Real_estimated_Categories,
+  Real_estimated_Count,
+  Real_estimated_hours,
+  Real_estimated_minutes,
+  Real_estimated_Remark,
+
+  // Incent
+  Incent_Brand,
+  Incent_Count,
+  Incent_Eastat_hours,
+  Incent_Eastat_minutes,
+  Incent_Remark,
+
+  // ITC Cigarette
+  ITC_Cigarette_Platform,
+  ITC_Cigarette_Count,
+  ITC_Cigarette_hours,
+  ITC_Cigarette_minutes,
+  ITC_Cigarette_Remark,
+
+  // User Info
+  user_name,
+  user_mail,
+  department
+}
+app.post("/submitProjectData", (req, res) => {
+  if (!db) {
+    return res.json({
+      success: false,
+      message: "Database not connected",
+    });
+  }
+
+  const data = req.body;
+
+  if (!data || Object.keys(data).length === 0) {
+    return res.json({
+      success: false,
+      message: "No data received",
+    });
+  }
+
+  const columns = Object.keys(data);
+  const values = Object.values(data);
+  const placeholders = columns.map(() => "?").join(",");
+
+  const sql = `
+    INSERT INTO social_media_n_website_audit_data
+    (${columns.join(",")})
+    VALUES (${placeholders})
+  `;
+
+  db.query(sql, values, (err) => {
+    if (err) {
+      console.error("❌ Insert Error:", err.message);
+      return res.json({
+        success: false,
+        message: "Insert failed",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Data inserted successfully",
+    });
+  });
 });
 
 /* ======================
