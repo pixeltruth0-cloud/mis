@@ -147,12 +147,12 @@ app.get("/getDepartmentData", (req, res) => {
   let sql = "";
   let params = [];
 
-  if (role === "Admin" || role === "Team_Lead" || role === "Manager") {
+  if (role === "HR" || role === "Team_Lead" || role === "Manager") {
     sql = `
       SELECT *
       FROM social_media_n_website_audit_data
-      WHERE department = ?
-      ORDER BY date DESC
+      WHERE department = 'Social_Media_N_Website_Audit'
+      ORDER BY date DESC;
     `;
     params = [department];
   } else {
