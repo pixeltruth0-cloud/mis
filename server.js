@@ -154,25 +154,25 @@ app.get("/getDepartmentData", (req, res) => {
   let sql = "";
   let params = [];
 
-  if (["Admin", "Team_Lead", "Manager"].includes(roleUpper)) {
-    // 👑 Admin / TL / Manager → department data
-    sql = `
-      SELECT *
-      FROM social_media_n_website_audit_data
-      WHERE TRIM(department) = ?
-      ORDER BY date DESC
-    `;
-    params = [dept];
-  } else {
-    // 👤 Employee → own data
-    sql = `
-      SELECT *
-      FROM social_media_n_website_audit_data
-      WHERE user_mail = ?
-      ORDER BY date DESC
-    `;
-    params = [userMail];
-  }
+if (["Admin", "Team_Lead", "Manager", "HR"].includes(roleUpper)) {
+  // Admin / HR / TL → department data
+  sql = `
+    SELECT *
+    FROM social_media_n_website_audit_data
+    WHERE TRIM(department) = ?
+    ORDER BY date DESC
+  `;
+  params = [dept];
+} else {
+  // Employee → own data
+  sql = `
+    SELECT *
+    FROM social_media_n_website_audit_data
+    WHERE user_mail = ?
+    ORDER BY date DESC
+  `;
+  params = [userMail];
+}
 
   // 🔍 DEBUG (temporary – remove later if you want)
   console.log("ROLE:", roleUpper);
