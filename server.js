@@ -139,31 +139,40 @@ app.get("/getDepartmentData", (req, res) => {
   if (!db) return res.json([]);
 
   const { user_mail, role, department } = req.query;
+  if (!user_mail || !role || !department) return res.json([]);
 
-  if (!user_mail || !role || !department) {
-    return res.json([]);
-  }
+  const roleUpper = role.trim().toUpperCase();
+  const dept = department.trim();
+  const userMail = user_mail.trim();
 
   let sql = "";
   let params = [];
 
-  if (role === "Admin" || role === "Team_Lead" || role === "Manager") {
+  // 🔥 ADMIN / HR / TL / MANAGER → department data
+  if (["Admin", "HR", "Team_Lead", "Manager"].includes(roleUpper)) {
     sql = `
       SELECT *
       FROM social_media_n_website_audit_data
-      WHERE department = ?
+      WHERE TRIM(department) = ?
       ORDER BY date DESC
     `;
-    params = [department];
-  } else {
+    params = [dept];
+  } 
+  // 👤 EMPLOYEE → own data
+  else {
     sql = `
       SELECT *
       FROM social_media_n_website_audit_data
       WHERE user_mail = ?
       ORDER BY date DESC
     `;
-    params = [user_mail];
+    params = [userMail];
   }
+
+  // 🔍 Debug (1–2 deploy ke baad hata sakti ho)
+  console.log("ROLE:", roleUpper);
+  console.log("DEPARTMENT:", dept);
+  console.log("USER MAIL:", userMail);
 
   db.query(sql, params, (err, rows) => {
     if (err) {
