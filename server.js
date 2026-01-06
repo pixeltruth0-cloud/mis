@@ -163,39 +163,24 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
    DASHBOARD DATA (ROLE BASED)
 ====================== */
 app.get("/getDepartmentData", (req, res) => {
-  if (!req.session || !req.session.User_Mail) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  const { Role, User_Mail, Department } = req.session;
+  const userMail = req.query.user_mail;
+  const role = req.query.role;
+  const department = req.query.department;
 
   let sql = "";
   let params = [];
 
-  if (Role === "Admin" || Role === "Manager" || Role === "Team_Lead") {
-    sql = `
-      SELECT *
-      FROM social_media_n_website_audit_data
-      WHERE department = ?
-      ORDER BY date DESC
-    `;
-    params = [Department];
+  if (role === "Admin" || role === "Team_Lead") {
+    sql = "SELECT * FROM social_media_n_website_audit_data WHERE department=?";
+    params = [department];
   } else {
-    sql = `
-      SELECT *
-      FROM social_media_n_website_audit_data
-      WHERE user_mail = ?
-      ORDER BY date DESC
-    `;
-    params = [User_Mail];
+    sql = "SELECT * FROM social_media_n_website_audit_data WHERE user_mail=?";
+    params = [userMail];
   }
 
-  db.query(sql, params, (err, result) => {
-    if (err) {
-      console.error("❌ DB Error:", err.message);
-      return res.status(500).json({ error: "Database error" });
-    }
-    res.json(result);
+  db.query(sql, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: "DB error" });
+    res.json(rows);
   });
 });
 
