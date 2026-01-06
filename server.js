@@ -134,8 +134,6 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
 
 /* ======================
    DASHBOARD DATA (ROLE BASED - QUERY)
-/* ======================
-   DASHBOARD DATA (ROLE BASED - QUERY)
 ====================== */
 app.get("/getDepartmentData", (req, res) => {
   if (!db) return res.json([]);
@@ -146,38 +144,26 @@ app.get("/getDepartmentData", (req, res) => {
     return res.json([]);
   }
 
-  // 🔥 IMPORTANT FIXES
-  const roleUpper = role.trim().toUpperCase();
-  const dept = department.trim();
-  const userMail = user_mail.trim();
-
   let sql = "";
   let params = [];
 
-if (["Admin", "Team_Lead", "Manager", "HR"].includes(roleUpper)) {
-  // Admin / HR / TL → department data
-  sql = `
-    SELECT *
-    FROM social_media_n_website_audit_data
-    WHERE TRIM(department) = ?
-    ORDER BY date DESC
-  `;
-  params = [dept];
-} else {
-  // Employee → own data
-  sql = `
-    SELECT *
-    FROM social_media_n_website_audit_data
-    WHERE user_mail = ?
-    ORDER BY date DESC
-  `;
-  params = [userMail];
-}
-
-  // 🔍 DEBUG (temporary – remove later if you want)
-  console.log("ROLE:", roleUpper);
-  console.log("DEPARTMENT:", dept);
-  console.log("USER_MAIL:", userMail);
+  if (role === "Admin" || role === "Team_Lead" || role === "Manager") {
+    sql = `
+      SELECT *
+      FROM social_media_n_website_audit_data
+      WHERE department = ?
+      ORDER BY date DESC
+    `;
+    params = [department];
+  } else {
+    sql = `
+      SELECT *
+      FROM social_media_n_website_audit_data
+      WHERE user_mail = ?
+      ORDER BY date DESC
+    `;
+    params = [user_mail];
+  }
 
   db.query(sql, params, (err, rows) => {
     if (err) {
@@ -186,4 +172,13 @@ if (["Admin", "Team_Lead", "Manager", "HR"].includes(roleUpper)) {
     }
     res.json(rows);
   });
+});
+
+/* ======================
+   Server Start
+====================== */
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server started on port ${PORT}`);
 });
