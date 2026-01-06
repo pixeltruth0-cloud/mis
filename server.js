@@ -100,6 +100,7 @@ app.post("/login", (req, res) => {
    (Social Media & Website Audit)
 ====================== */
 app.post("/submitProjectData", upload.none(), (req, res) => {
+   console.log("📥 RECEIVED BODY:", req.body);
   if (!db) {
     return res.json({
       success: false,
