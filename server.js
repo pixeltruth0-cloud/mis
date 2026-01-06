@@ -163,23 +163,46 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
    DASHBOARD DATA (ROLE BASED)
 ====================== */
 app.get("/getDepartmentData", (req, res) => {
-  const userMail = req.query.user_mail;
-  const role = req.query.role;
-  const department = req.query.department;
+
+  if (!req.session || !req.session.Role) {
+    return res.status(401).json([]);
+  }
+
+  const role = req.session.Role;
+  const department = req.session.Department;
+  const userMail = req.session.User_Mail;
 
   let sql = "";
   let params = [];
 
-  if (role === "Admin" || role === "HR") {
-    sql = "SELECT * FROM social_media_n_website_audit_data WHERE department=?";
+  if (
+    role === "Admin" ||
+    role === "HR" ||
+    role === "Manager" ||
+    role === "Team_Lead"
+  ) {
+    sql = `
+      SELECT *
+      FROM social_media_n_website_audit_data
+      WHERE department = ?
+      ORDER BY date DESC
+    `;
     params = [department];
   } else {
-    sql = "SELECT * FROM social_media_n_website_audit_data WHERE user_mail=?";
+    sql = `
+      SELECT *
+      FROM social_media_n_website_audit_data
+      WHERE user_mail = ?
+      ORDER BY date DESC
+    `;
     params = [userMail];
   }
 
   db.query(sql, params, (err, rows) => {
-    if (err) return res.status(500).json({ error: "DB error" });
+    if (err) {
+      console.error("Dashboard DB error:", err);
+      return res.status(500).json([]);
+    }
     res.json(rows);
   });
 });
