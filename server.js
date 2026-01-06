@@ -2,36 +2,15 @@ const express = require("express");
 const mysql = require("mysql2");
 const cors = require("cors");
 const multer = require("multer");
-const session = require("express-session");
 
 const app = express();
-const upload = multer(); // REQUIRED FOR FORMDATA
+const upload = multer();
 
 /* ======================
    Middleware
 ====================== */
-app.use(
-  cors({
-    origin: "https://pixeltruth.com", // frontend domain
-    credentials: true
-  })
-);
-
+app.use(cors()); // simple CORS (no credentials)
 app.use(express.json());
-
-app.use(
-  session({
-    name: "pixeltruth.sid",
-    secret: "pixeltruth_secret_key",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: false, // keep false (Render/Railway proxy handles HTTPS)
-      httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 8 // 8 hours
-    }
-  })
-);
 
 /* ======================
    Database Connection
@@ -89,14 +68,8 @@ app.post("/login", (req, res) => {
     }
 
     const user = rows[0];
-
-    // 🔐 SESSION SET
-    req.session.User_Mail = user.User_Mail;
-    req.session.Role = user.Role;
-    req.session.Department = user.Department;
-    req.session.Employee_ID = user.Employee_ID;
-
     const BASE_URL = "https://pixeltruth.com/mis";
+
     let redirectUrl = `${BASE_URL}/${user.Department}/dashboard.html`;
 
     if (user.Role === "HR") {
@@ -160,27 +133,21 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
 });
 
 /* ======================
-   DASHBOARD DATA (ROLE BASED)
+   DASHBOARD DATA (ROLE BASED - QUERY)
 ====================== */
 app.get("/getDepartmentData", (req, res) => {
+  if (!db) return res.json([]);
 
-  if (!req.session || !req.session.Role) {
-    return res.status(401).json([]);
+  const { user_mail, role, department } = req.query;
+
+  if (!user_mail || !role || !department) {
+    return res.json([]);
   }
-
-  const role = req.session.Role;
-  const department = req.session.Department;
-  const userMail = req.session.User_Mail;
 
   let sql = "";
   let params = [];
 
-  if (
-    role === "Admin" ||
-    role === "HR" ||
-    role === "Manager" ||
-    role === "Team_Lead"
-  ) {
+  if (role === "Admin" || role === "Team_Lead" || role === "Manager") {
     sql = `
       SELECT *
       FROM social_media_n_website_audit_data
@@ -195,25 +162,15 @@ app.get("/getDepartmentData", (req, res) => {
       WHERE user_mail = ?
       ORDER BY date DESC
     `;
-    params = [userMail];
+    params = [user_mail];
   }
 
   db.query(sql, params, (err, rows) => {
     if (err) {
-      console.error("Dashboard DB error:", err);
-      return res.status(500).json([]);
+      console.error("❌ DB Error:", err.message);
+      return res.json([]);
     }
     res.json(rows);
-  });
-});
-
-/* ======================
-   LOGOUT
-====================== */
-app.post("/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.clearCookie("pixeltruth.sid");
-    res.json({ success: true });
   });
 });
 
