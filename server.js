@@ -1,14 +1,16 @@
 const express = require("express");
 const mysql = require("mysql2");
 const cors = require("cors");
+const multer = require("multer");
 
 const app = express();
+const upload = multer(); // 🔥 REQUIRED FOR FORMDATA
 
 /* ======================
    Middleware
 ====================== */
 app.use(cors());
-app.use(express.json());
+app.use(express.json()); // for JSON requests
 
 /* ======================
    Database Connection
@@ -97,7 +99,7 @@ app.post("/login", (req, res) => {
    INSERT ALL FORM VALUES
    (Social Media & Website Audit)
 ====================== */
-app.post("/submitProjectData", (req, res) => {
+app.post("/submitProjectData", upload.none(), (req, res) => {
   if (!db) {
     return res.json({
       success: false,
@@ -114,6 +116,10 @@ app.post("/submitProjectData", (req, res) => {
     });
   }
 
+  // ❌ safety: remove extra keys if accidentally sent
+  delete data.insert_id;
+  delete data.created_at;
+
   const columns = Object.keys(data);
   const values = Object.values(data);
   const placeholders = columns.map(() => "?").join(",");
@@ -129,7 +135,8 @@ app.post("/submitProjectData", (req, res) => {
       console.error("❌ Insert Error:", err.message);
       return res.json({
         success: false,
-        message: "Insert failed"
+        message: "Insert failed",
+        error: err.message
       });
     }
 
