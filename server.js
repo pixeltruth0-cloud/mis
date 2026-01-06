@@ -184,16 +184,16 @@ app.get("/getDepartmentData", (req, res) => {
     sql = `
       SELECT *
       FROM social_media_n_website_audit_data
-      WHERE Department = ?
-      ORDER BY Date DESC
+      WHERE department = ?
+      ORDER BY date DESC
     `;
     params = [department];
   } else {
     sql = `
       SELECT *
       FROM social_media_n_website_audit_data
-      WHERE User_Mail = ?
-      ORDER BY Date DESC
+      WHERE user_mail = ?
+      ORDER BY date DESC
     `;
     params = [userMail];
   }
