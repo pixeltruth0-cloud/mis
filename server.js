@@ -70,12 +70,12 @@ app.post("/login", (req, res) => {
     const user = rows[0];
     const BASE_URL = "https://pixeltruth.com/mis";
 
-    let redirectUrl = `${BASE_URL}/${user.Department}/dashboard.html`;
+    let redirectUrl = `${BASE_URL}/${user.Department}/dashboard`;
 
     if (user.Role === "HR") {
-      redirectUrl = `${BASE_URL}/HR/${user.Department}/HR_dashboard.html`;
+      redirectUrl = `${BASE_URL}/HR/${user.Department}/HR_dashboard`;
     } else if (user.Role === "Team_Lead") {
-      redirectUrl = `${BASE_URL}/TL/${user.Department}/TL_dashboard.html`;
+      redirectUrl = `${BASE_URL}/TL/${user.Department}/TL_dashboard`;
     }
 
     return res.json({
