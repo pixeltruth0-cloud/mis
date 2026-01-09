@@ -210,19 +210,6 @@ app.get("/getUsersByDepartment", (req, res) => {
   });
 });
 
-  // 🔍 Debug (1–2 deploy ke baad hata sakti ho)
-  console.log("ROLE:", roleUpper);
-  console.log("DEPARTMENT:", dept);
-  console.log("USER MAIL:", userMail);
-
-  db.query(sql, params, (err, rows) => {
-    if (err) {
-      console.error("❌ DB Error:", err.message);
-      return res.json([]);
-    }
-    res.json(rows);
-  });
-
 
 /* ======================
    ASSIGN TASK (DEPT WISE TABLE)
