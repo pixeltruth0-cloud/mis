@@ -166,9 +166,18 @@ app.get("/getDepartmentData", (req, res) => {
       WHERE user_mail = ?
       ORDER BY date DESC
     `;
-    params = [userMail];
+      params = [userMail];
   }
 
+  db.query(sql, params, (err, rows) => {
+    if (err) {
+      console.error("❌ DB Error:", err.message);
+      return res.json([]);
+    }
+    res.json(rows);
+  });
+});
+   
 app.get("/getUsersByDepartment", (req, res) => {
   if (!db) return res.json([]);
 
