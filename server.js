@@ -166,18 +166,9 @@ app.get("/getDepartmentData", (req, res) => {
       WHERE user_mail = ?
       ORDER BY date DESC
     `;
-      params = [userMail];
+    params = [userMail];
   }
 
-  db.query(sql, params, (err, rows) => {
-    if (err) {
-      console.error("❌ DB Error:", err.message);
-      return res.json([]);
-    }
-    res.json(rows);
-  });
-});
-   
 app.get("/getUsersByDepartment", (req, res) => {
   if (!db) return res.json([]);
 
@@ -210,6 +201,19 @@ app.get("/getUsersByDepartment", (req, res) => {
   });
 });
 
+  // 🔍 Debug (1–2 deploy ke baad hata sakti ho)
+  console.log("ROLE:", roleUpper);
+  console.log("DEPARTMENT:", dept);
+  console.log("USER MAIL:", userMail);
+
+  db.query(sql, params, (err, rows) => {
+    if (err) {
+      console.error("❌ DB Error:", err.message);
+      return res.json([]);
+    }
+    res.json(rows);
+  });
+});
 
 /* ======================
    ASSIGN TASK (DEPT WISE TABLE)
