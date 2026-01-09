@@ -222,7 +222,6 @@ app.get("/getUsersByDepartment", (req, res) => {
     }
     res.json(rows);
   });
-});
 
 /* ======================
    ASSIGN TASK (DEPT WISE TABLE)
