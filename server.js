@@ -169,6 +169,38 @@ app.get("/getDepartmentData", (req, res) => {
     params = [userMail];
   }
 
+app.get("/getUsersByDepartment", (req, res) => {
+  if (!db) return res.json([]);
+
+  const { department } = req.query;
+
+  if (!department) {
+    return res.json([]);
+  }
+
+  const dept = department.trim();
+
+  const sql = `
+    SELECT 
+      User_Name,
+      User_Mail,
+      Department
+    FROM mis_user_data
+    WHERE TRIM(Department) = ?
+      AND Role != 'HR'
+      AND Role != 'Admin'
+  `;
+
+  db.query(sql, [dept], (err, rows) => {
+    if (err) {
+      console.error("❌ getUsersByDepartment error:", err.message);
+      return res.json([]);
+    }
+
+    res.json(rows);
+  });
+});
+
   // 🔍 Debug (1–2 deploy ke baad hata sakti ho)
   console.log("ROLE:", roleUpper);
   console.log("DEPARTMENT:", dept);
