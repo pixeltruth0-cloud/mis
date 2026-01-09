@@ -216,6 +216,63 @@ app.get("/getUsersByDepartment", (req, res) => {
 });
 
 /* ======================
+   ASSIGN TASK (DEPT WISE TABLE)
+====================== */
+app.post("/assignTask", (req, res) => {
+  if (!db) {
+    return res.json({ success: false, message: "DB not connected" });
+  }
+
+  const {
+    user_name,
+    user_mail,
+    task_title,
+    task_description,
+    due_date,
+    estimated_hours,
+    department,
+    assigned_by
+  } = req.body;
+
+  if (!user_mail || !task_title || !due_date || !department || !assigned_by) {
+    return res.json({ success: false, message: "Missing required fields" });
+  }
+
+  // 🔥 department → safe table name
+  const tableName =
+    "assigned_tasks_" +
+    department
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_");
+
+  const sql = `
+    INSERT INTO ${tableName}
+    (user_name, user_mail, task_title, task_description,
+     due_date, estimated_hours, assigned_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  const values = [
+    user_name,
+    user_mail,
+    task_title,
+    task_description || "",
+    due_date,
+    estimated_hours || 0,
+    assigned_by
+  ];
+
+  db.query(sql, values, (err) => {
+    if (err) {
+      console.error("❌ Assign task error:", err.message);
+      return res.json({ success: false, message: "Task insert failed" });
+    }
+
+    res.json({ success: true, message: "Task assigned successfully" });
+  });
+});
+
+/* ======================
    Server Start
 ====================== */
 const PORT = process.env.PORT || 3000;
