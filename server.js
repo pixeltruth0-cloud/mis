@@ -226,7 +226,6 @@ app.post("/assignTask", (req, res) => {
     task_description,
     due_date,
     estimated_hours,
-    department,
     assigned_by
   } = req.body;
 
