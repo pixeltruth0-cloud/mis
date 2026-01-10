@@ -315,6 +315,45 @@ app.get("/getAssignedTasks", (req, res) => {
   });
 });
 
+/* ======================
+   GET MY TASKS (USER SIDE)   <-- 🔥 YAHAN PASTE KARO
+====================== */
+app.get("/getMyTasks", (req, res) => {
+  if (!db) {
+    return res.json({ success: false, data: [] });
+  }
+
+  const { department, user_mail } = req.query;
+
+  if (!department || !user_mail) {
+    return res.json({ success: false, data: [] });
+  }
+
+  const tableName =
+    "assigned_tasks_" +
+    department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+  const sql = `
+    SELECT
+      task_title,
+      task_description,
+      due_date,
+      estimated_hours,
+      assigned_by
+    FROM ${tableName}
+    WHERE user_mail = ?
+    ORDER BY id DESC
+  `;
+
+  db.query(sql, [user_mail], (err, rows) => {
+    if (err) {
+      console.error("❌ getMyTasks error:", err.message);
+      return res.json({ success: false, data: [] });
+    }
+
+    res.json({ success: true, data: rows });
+  });
+});
 
 /* ======================
    Server Start
