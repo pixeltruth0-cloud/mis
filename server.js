@@ -269,6 +269,53 @@ app.post("/assignTask", (req, res) => {
 });
 
 /* ======================
+   GET ASSIGNED TASKS (DEPT WISE)
+====================== */
+app.get("/getAssignedTasks", (req, res) => {
+  if (!db) {
+    return res.json({ success: false, message: "DB not connected" });
+  }
+
+  const { department } = req.query;
+
+  if (!department) {
+    return res.json({ success: false, message: "Department required" });
+  }
+
+  // 🔥 Same table naming logic as assignTask
+  const tableName =
+    "assigned_tasks_" +
+    department
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_");
+
+  const sql = `
+    SELECT 
+      user_name,
+      user_mail,
+      task_title,
+      task_description,
+      due_date,
+      estimated_hours
+    FROM ${tableName}
+    ORDER BY id DESC
+  `;
+
+  db.query(sql, (err, rows) => {
+    if (err) {
+      console.error("❌ Get assigned tasks error:", err.message);
+      return res.json({ success: false, data: [] });
+    }
+
+    res.json({
+      success: true,
+      data: rows
+    });
+  });
+});
+
+
+/* ======================
    Server Start
 ====================== */
 const PORT = process.env.PORT || 3000;
