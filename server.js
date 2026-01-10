@@ -297,6 +297,7 @@ app.get("/getAssignedTasks", (req, res) => {
       task_description,
       due_date,
       estimated_hours
+      assigned_by
     FROM ${tableName}
     ORDER BY id DESC
   `;
