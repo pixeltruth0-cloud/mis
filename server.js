@@ -226,6 +226,7 @@ app.post("/assignTask", (req, res) => {
     task_description,
     due_date,
     estimated_hours,
+   department, 
     assigned_by
   } = req.body;
 
@@ -295,7 +296,7 @@ app.get("/getAssignedTasks", (req, res) => {
       task_title,
       task_description,
       due_date,
-      estimated_hours
+      estimated_hours,
       assigned_by
     FROM ${tableName}
     ORDER BY id DESC
