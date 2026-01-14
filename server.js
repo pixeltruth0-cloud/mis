@@ -9,7 +9,11 @@ const upload = multer();
 /* ======================
    Middleware
 ====================== */
-app.use(cors()); // simple CORS (no credentials)
+app.use(cors({
+  origin: "*",
+  credentials: true
+}));
+ // simple CORS (no credentials)
 app.use(express.json());
 
 /* ======================
@@ -149,7 +153,7 @@ app.get("/getDepartmentData", (req, res) => {
   let params = [];
 
   // 🔥 ADMIN / HR / TL / MANAGER → department data
-  if (["Admin", "HR", "Team_Lead", "Manager"].includes(roleUpper)) {
+if (["ADMIN", "HR", "TEAM_LEAD", "MANAGER"].includes(roleUpper)) {
     sql = `
       SELECT *
       FROM social_media_n_website_audit_data
@@ -174,7 +178,13 @@ app.get("/getDepartmentData", (req, res) => {
       console.error("❌ DB Error:", err.message);
       return res.json([]);
     }
-    res.json(rows);
+    rows.forEach(r => {
+  if (!r.date && r.created_at) {
+    r.date = r.created_at;
+  }
+});
+
+res.json(rows);
   });
 });
    
