@@ -388,6 +388,82 @@ app.post("/assignTask", (req, res) => {
   });
 });
 
+app.post("/updateTask", (req, res) => {
+  if (!db) return res.json({ success: false });
+
+  const {
+    task_id,
+    user_name,
+    user_mail,
+    task_title,
+    task_description,
+    due_date,
+    estimated_hours,
+    department
+  } = req.body;
+
+  if (!task_id || !department) {
+    return res.json({ success: false });
+  }
+
+  const tableName =
+    "assigned_tasks_" +
+    department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+  const sql = `
+    UPDATE ${tableName}
+    SET
+      user_name = ?,
+      user_mail = ?,
+      task_title = ?,
+      task_description = ?,
+      due_date = ?,
+      estimated_hours = ?
+    WHERE id = ?
+  `;
+
+  const values = [
+    user_name,
+    user_mail,
+    task_title,
+    task_description || "",
+    due_date,
+    estimated_hours || 0,
+    task_id
+  ];
+
+  db.query(sql, values, (err) => {
+    if (err) {
+      console.error("❌ updateTask error:", err.message);
+      return res.json({ success: false });
+    }
+
+    res.json({ success: true });
+  });
+});
+app.post("/deleteTask", (req, res) => {
+  if (!db) return res.json({ success: false });
+
+  const { task_id, department } = req.body;
+  if (!task_id || !department) return res.json({ success: false });
+
+  const tableName =
+    "assigned_tasks_" +
+    department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+  const sql = `DELETE FROM ${tableName} WHERE id = ?`;
+
+  db.query(sql, [task_id], (err) => {
+    if (err) {
+      console.error("❌ deleteTask error:", err.message);
+      return res.json({ success: false });
+    }
+
+    res.json({ success: true });
+  });
+});
+
+
 /* ======================
    GET ASSIGNED TASKS (DEPT WISE)
 ====================== */
@@ -410,16 +486,18 @@ app.get("/getAssignedTasks", (req, res) => {
       .replace(/[^a-z0-9]+/g, "_");
 
   const sql = `
-    SELECT 
-      user_name,
-      user_mail,
-      task_title,
-      task_description,
-      due_date,
-      estimated_hours,
-      assigned_by
-    FROM ${tableName}
-    ORDER BY id DESC
+SELECT 
+  id,
+  user_name,
+  user_mail,
+  task_title,
+  task_description,
+  due_date,
+  estimated_hours,
+  assigned_by
+FROM ${tableName}
+ORDER BY id DESC
+
   `;
 
   db.query(sql, (err, rows) => {
@@ -432,6 +510,27 @@ app.get("/getAssignedTasks", (req, res) => {
       success: true,
       data: rows
     });
+  });
+});
+app.get("/getTaskById", (req, res) => {
+  if (!db) return res.json({});
+
+  const { id, department } = req.query;
+  if (!id || !department) return res.json({});
+
+  const tableName =
+    "assigned_tasks_" +
+    department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+  const sql = `SELECT * FROM ${tableName} WHERE id = ? LIMIT 1`;
+
+  db.query(sql, [id], (err, rows) => {
+    if (err || rows.length === 0) {
+      console.error("❌ getTaskById error:", err?.message);
+      return res.json({});
+    }
+
+    res.json(rows[0]);
   });
 });
 
