@@ -256,11 +256,16 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
    EMAIL CONFIG
 ====================== */
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "pixeltruth.com",
+  port: 465,
+  secure: true, // 🔥 VERY IMPORTANT for port 465
   auth: {
-    user: process.env.EMAIL_USER, // pixeltruth.notify@gmail.com
-    pass: process.env.EMAIL_PASS  // Gmail App Password
-  }
+    user: process.env.EMAIL_USER, // info@pixeltruth.com
+    pass: process.env.EMAIL_PASS  // GoDaddy email ka password
+  },
+  connectionTimeout: 10000, // ⏱️ 10 sec timeout fix
+  greetingTimeout: 10000,
+  socketTimeout: 10000
 });
 
 transporter.verify((err) => {
