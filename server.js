@@ -364,6 +364,35 @@ app.get("/getMyTasks", (req, res) => {
     res.json({ success: true, data: rows });
   });
 });
+/* ======================
+   GET ALL USERS (HR / ADMIN)
+====================== */
+app.get("/getDepartmentUsers", (req, res) => {
+  if (!db) return res.json([]);
+
+  const sql = `
+    SELECT 
+      Employee_ID,
+      User_Name,
+      User_Mail,
+      Designation,
+      Department,
+      Role,
+      Phone_Number,
+      Reporting_Person,
+      Date_of_Birth
+    FROM mis_user_data
+    ORDER BY Employee_ID DESC
+  `;
+
+  db.query(sql, (err, rows) => {
+    if (err) {
+      console.error("❌ getDepartmentUsers error:", err.message);
+      return res.json([]);
+    }
+    res.json(rows);
+  });
+});
 
 /* ======================
    Server Start
