@@ -2,6 +2,7 @@ const express = require("express");
 const mysql = require("mysql2");
 const cors = require("cors");
 const multer = require("multer");
+const nodemailer = require("nodemailer"); // ✅ ADD THIS
 
 const app = express();
 const upload = multer();
@@ -252,6 +253,26 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
 });
 
 /* ======================
+   EMAIL CONFIG
+====================== */
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER, // pixeltruth.notify@gmail.com
+    pass: process.env.EMAIL_PASS  // Gmail App Password
+  }
+});
+
+transporter.verify((err) => {
+  if (err) {
+    console.error("❌ Email config error:", err.message);
+  } else {
+    console.log("✅ Email server ready");
+  }
+});
+
+
+/* ======================
    DASHBOARD DATA (ROLE BASED - QUERY)
 ====================== */
 app.get("/getDepartmentData", (req, res) => {
@@ -387,14 +408,13 @@ app.post("/assignTask", (req, res) => {
     }
 
     /* ================= EMAIL NOTIFICATION ================= */
-
-    const mailOptions = {
-      from: `"Pixeltruth MIS" <${process.env.EMAIL_USER}>`,
-      to: user_mail,              // 👤 Employee
-      cc: assigned_by,            // 👤 HR / TL
-      subject: `📌 New Task Assigned: ${task_title}`,
-      html: `
-        <div style="font-family:Arial,sans-serif">
+    try {
+      await transporter.sendMail({
+        from: `"Pixeltruth MIS" <${process.env.EMAIL_USER}>`,
+        to: user_mail,        // Employee
+        cc: assigned_by,      // HR / TL
+        subject: `📌 New Task Assigned: ${task_title}`,
+        html: `
           <h2>New Task Assigned</h2>
           <p><b>Task:</b> ${task_title}</p>
           <p><b>Description:</b> ${task_description || "-"}</p>
@@ -402,19 +422,15 @@ app.post("/assignTask", (req, res) => {
           <p><b>Estimated Hours:</b> ${estimated_hours || 0}</p>
           <p><b>Assigned By:</b> ${assigned_by}</p>
           <hr>
-          <p style="font-size:12px;color:#555">
-            This is an automated email from Pixeltruth MIS.
+          <p style="font-size:12px;color:#666">
+            Pixeltruth MIS – Automated Notification
           </p>
-        </div>
-      `
-    };
+        `
+      });
 
-    try {
-      await transporter.sendMail(mailOptions);
-      console.log("📧 Task email sent successfully");
+      console.log("📧 Task email sent");
     } catch (emailErr) {
       console.error("❌ Email error:", emailErr.message);
-      // email fail ho jaye to bhi task insert ho chuka hai
     }
 
     res.json({ success: true });
