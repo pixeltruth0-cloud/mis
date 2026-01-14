@@ -2,7 +2,7 @@ const express = require("express");
 const mysql = require("mysql2");
 const cors = require("cors");
 const multer = require("multer");
-const nodemailer = require("nodemailer"); // ✅ ADD THIS
+
 
 const app = express();
 const upload = multer();
@@ -252,29 +252,6 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
   });
 });
 
-/* ======================
-   EMAIL CONFIG
-====================== */
-const transporter = nodemailer.createTransport({
-  host: "pixeltruth.com",
-  port: 465,
-  secure: true, // 🔥 VERY IMPORTANT for port 465
-  auth: {
-    user: process.env.EMAIL_USER, // info@pixeltruth.com
-    pass: process.env.EMAIL_PASS  // GoDaddy email ka password
-  },
-  connectionTimeout: 10000, // ⏱️ 10 sec timeout fix
-  greetingTimeout: 10000,
-  socketTimeout: 10000
-});
-
-transporter.verify((err) => {
-  if (err) {
-    console.error("❌ Email config error:", err.message);
-  } else {
-    console.log("✅ Email server ready");
-  }
-});
 
 
 /* ======================
@@ -411,36 +388,6 @@ app.post("/assignTask", (req, res) => {
       console.error("❌ Assign task error:", err.message);
       return res.json({ success: false });
     }
-
-    /* ================= EMAIL NOTIFICATION ================= */
-    try {
-      await transporter.sendMail({
-        from: `"Pixeltruth MIS" <${process.env.EMAIL_USER}>`,
-        to: user_mail,        // Employee
-        cc: assigned_by,      // HR / TL
-        subject: `📌 New Task Assigned: ${task_title}`,
-        html: `
-          <h2>New Task Assigned</h2>
-          <p><b>Task:</b> ${task_title}</p>
-          <p><b>Description:</b> ${task_description || "-"}</p>
-          <p><b>Due Date:</b> ${due_date}</p>
-          <p><b>Estimated Hours:</b> ${estimated_hours || 0}</p>
-          <p><b>Assigned By:</b> ${assigned_by}</p>
-          <hr>
-          <p style="font-size:12px;color:#666">
-            Pixeltruth MIS – Automated Notification
-          </p>
-        `
-      });
-
-      console.log("📧 Task email sent");
-    } catch (emailErr) {
-      console.error("❌ Email error:", emailErr.message);
-    }
-
-    res.json({ success: true });
-  });
-});
 
 /* ======================
    GET ASSIGNED TASKS (DEPT WISE)
