@@ -480,7 +480,7 @@ app.get("/getMyTasks", (req, res) => {
   });
 });
 /* ======================
-   GET ALL USERS (HR / ADMIN)
+   GET USERS (HR) – NON ARCHIVED ONLY
 ====================== */
 app.get("/getDepartmentUsers", (req, res) => {
   if (!db) return res.json([]);
@@ -496,6 +496,7 @@ app.get("/getDepartmentUsers", (req, res) => {
       Phone_Number,
       Reporting_Person
     FROM mis_user_data
+    WHERE is_archived = 0
     ORDER BY Employee_ID DESC
   `;
 
@@ -507,6 +508,7 @@ app.get("/getDepartmentUsers", (req, res) => {
     res.json(rows);
   });
 });
+
 
 /* ======================
    Server Start
