@@ -339,9 +339,6 @@ app.get("/getUsersByDepartment", (req, res) => {
 });
 
 
-/* ======================
-   ASSIGN TASK (DEPT WISE TABLE)
-====================== */
 app.post("/assignTask", (req, res) => {
   if (!db) {
     return res.json({ success: false, message: "DB not connected" });
@@ -383,11 +380,15 @@ app.post("/assignTask", (req, res) => {
     assigned_by
   ];
 
-  db.query(sql, values, async (err) => {
+  db.query(sql, values, (err) => {
     if (err) {
       console.error("❌ Assign task error:", err.message);
       return res.json({ success: false });
     }
+
+    res.json({ success: true });
+  });
+});
 
 /* ======================
    GET ASSIGNED TASKS (DEPT WISE)
