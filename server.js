@@ -379,7 +379,7 @@ app.get("/getDepartmentUsers", (req, res) => {
       Department,
       Role,
       Phone_Number,
-      Reporting_Person,
+      Reporting_Person
     FROM mis_user_data
     ORDER BY Employee_ID DESC
   `;
