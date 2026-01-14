@@ -98,6 +98,121 @@ app.post("/login", (req, res) => {
     });
   });
 });
+/* ======================
+   ADD USER (HR)
+====================== */
+app.post("/addUser", upload.none(), (req, res) => {
+  if (!db) {
+    return res.json({ success: false, message: "DB not connected" });
+  }
+
+  const {
+    New_Employee_ID,
+    New_Name,
+    New_User_Mail,
+    New_Designation,
+    New_Reporting_Person,
+    New_Role,
+    New_Number,
+    New_Date,
+    New_Password
+  } = req.body;
+
+  if (!New_Employee_ID || !New_Name || !New_User_Mail || !New_Role) {
+    return res.json({ success: false, message: "Missing fields" });
+  }
+
+  const sql = `
+    INSERT INTO mis_user_data
+    (
+      Employee_ID,
+      User_Name,
+      User_Mail,
+      Designation,
+      Reporting_Person,
+      Role,
+      Phone_Number,
+      Date_of_Birth,
+      Password
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  const values = [
+    New_Employee_ID,
+    New_Name,
+    New_User_Mail,
+    New_Designation || "",
+    New_Reporting_Person || "",
+    New_Role,
+    New_Number || "",
+    New_Date || null,
+    New_Password
+  ];
+
+  db.query(sql, values, (err) => {
+    if (err) {
+      console.error("❌ Add User Error:", err.message);
+      return res.json({ success: false });
+    }
+
+    res.json({ success: true });
+  });
+});
+
+/* ======================
+   DELETE USER
+====================== */
+app.post("/deleteUser", (req, res) => {
+  if (!db) {
+    return res.json({ success: false });
+  }
+
+  const { Employee_ID, User_Mail } = req.body;
+
+  if (!Employee_ID || !User_Mail) {
+    return res.json({ success: false });
+  }
+
+  const sql = `
+    DELETE FROM mis_user_data
+    WHERE Employee_ID = ? AND User_Mail = ?
+  `;
+
+  db.query(sql, [Employee_ID, User_Mail], (err) => {
+    if (err) {
+      console.error("❌ Delete User Error:", err.message);
+      return res.json({ success: false });
+    }
+
+    res.json({ success: true });
+  });
+});
+/* ======================
+   ARCHIVE USER (SOFT DELETE)
+====================== */
+app.post("/archiveUser", (req, res) => {
+  if (!db) {
+    return res.json({ success: false });
+  }
+
+  const { Employee_ID } = req.body;
+
+  const sql = `
+    UPDATE mis_user_data
+    SET is_archived = 1
+    WHERE Employee_ID = ?
+  `;
+
+  db.query(sql, [Employee_ID], (err) => {
+    if (err) {
+      console.error("❌ Archive Error:", err.message);
+      return res.json({ success: false });
+    }
+
+    res.json({ success: true });
+  });
+});
 
 /* ======================
    INSERT PROJECT DATA
