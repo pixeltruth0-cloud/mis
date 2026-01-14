@@ -387,6 +387,34 @@ app.post("/assignTask", (req, res) => {
     res.json({ success: true });
   });
 });
+app.post("/updateTaskStatus", (req, res) => {
+
+  if (!db) return res.json({ success:false });
+
+  const { task_id, department, task_status, status_note } = req.body;
+
+  if (!task_id || !department || !task_status) {
+    return res.json({ success:false });
+  }
+
+  const tableName =
+    "assigned_tasks_" +
+    department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+  const sql = `
+    UPDATE ${tableName}
+    SET task_status = ?, status_note = ?
+    WHERE id = ?
+  `;
+
+  db.query(sql, [task_status, status_note || "", task_id], err => {
+    if (err) {
+      console.error("❌ Status update error:", err);
+      return res.json({ success:false });
+    }
+    res.json({ success:true });
+  });
+});
 
 app.post("/updateTask", (req, res) => {
   if (!db) return res.json({ success: false });
