@@ -132,7 +132,6 @@ app.post("/addUser", upload.none(), (req, res) => {
       Reporting_Person,
       Role,
       Phone_Number,
-      Date_of_Birth,
       Password
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
