@@ -99,7 +99,7 @@ app.post("/login", (req, res) => {
   });
 });
 /* ======================
-   ADD USER (HR)
+   ADD USER (HR) ✅ FIXED
 ====================== */
 app.post("/addUser", upload.none(), (req, res) => {
   if (!db) {
@@ -114,17 +114,15 @@ app.post("/addUser", upload.none(), (req, res) => {
     New_Reporting_Person,
     New_Role,
     New_Number,
-    New_Date,
     New_Password
   } = req.body;
 
-  if (!New_Employee_ID || !New_Name || !New_User_Mail || !New_Role) {
+  if (!New_Employee_ID || !New_Name || !New_User_Mail || !New_Role || !New_Password) {
     return res.json({ success: false, message: "Missing fields" });
   }
 
   const sql = `
-    INSERT INTO mis_user_data
-    (
+    INSERT INTO mis_user_data (
       Employee_ID,
       User_Name,
       User_Mail,
@@ -132,9 +130,11 @@ app.post("/addUser", upload.none(), (req, res) => {
       Reporting_Person,
       Role,
       Phone_Number,
-      Password
+      Password,
+      Department,
+      is_archived
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
   `;
 
   const values = [
@@ -145,8 +145,8 @@ app.post("/addUser", upload.none(), (req, res) => {
     New_Reporting_Person || "",
     New_Role,
     New_Number || "",
-    New_Date || null,
-    New_Password
+    New_Password,
+    req.body.Department || "Social_Media_N_Website_Audit"
   ];
 
   db.query(sql, values, (err) => {
@@ -155,6 +155,7 @@ app.post("/addUser", upload.none(), (req, res) => {
       return res.json({ success: false });
     }
 
+    console.log("✅ User added:", New_User_Mail);
     res.json({ success: true });
   });
 });
