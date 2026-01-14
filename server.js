@@ -351,20 +351,17 @@ app.post("/assignTask", (req, res) => {
     task_description,
     due_date,
     estimated_hours,
-   department, 
+    department,
     assigned_by
   } = req.body;
 
   if (!user_mail || !task_title || !due_date || !department || !assigned_by) {
-    return res.json({ success: false, message: "Missing required fields" });
+    return res.json({ success: false, message: "Missing fields" });
   }
 
-  // 🔥 department → safe table name
   const tableName =
     "assigned_tasks_" +
-    department
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_");
+    department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
   const sql = `
     INSERT INTO ${tableName}
@@ -383,13 +380,44 @@ app.post("/assignTask", (req, res) => {
     assigned_by
   ];
 
-  db.query(sql, values, (err) => {
+  db.query(sql, values, async (err) => {
     if (err) {
       console.error("❌ Assign task error:", err.message);
-      return res.json({ success: false, message: "Task insert failed" });
+      return res.json({ success: false });
     }
 
-    res.json({ success: true, message: "Task assigned successfully" });
+    /* ================= EMAIL NOTIFICATION ================= */
+
+    const mailOptions = {
+      from: `"Pixeltruth MIS" <${process.env.EMAIL_USER}>`,
+      to: user_mail,              // 👤 Employee
+      cc: assigned_by,            // 👤 HR / TL
+      subject: `📌 New Task Assigned: ${task_title}`,
+      html: `
+        <div style="font-family:Arial,sans-serif">
+          <h2>New Task Assigned</h2>
+          <p><b>Task:</b> ${task_title}</p>
+          <p><b>Description:</b> ${task_description || "-"}</p>
+          <p><b>Due Date:</b> ${due_date}</p>
+          <p><b>Estimated Hours:</b> ${estimated_hours || 0}</p>
+          <p><b>Assigned By:</b> ${assigned_by}</p>
+          <hr>
+          <p style="font-size:12px;color:#555">
+            This is an automated email from Pixeltruth MIS.
+          </p>
+        </div>
+      `
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log("📧 Task email sent successfully");
+    } catch (emailErr) {
+      console.error("❌ Email error:", emailErr.message);
+      // email fail ho jaye to bhi task insert ho chuka hai
+    }
+
+    res.json({ success: true });
   });
 });
 
