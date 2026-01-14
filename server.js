@@ -380,7 +380,6 @@ app.get("/getDepartmentUsers", (req, res) => {
       Role,
       Phone_Number,
       Reporting_Person,
-      Date_of_Birth
     FROM mis_user_data
     ORDER BY Employee_ID DESC
   `;
