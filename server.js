@@ -522,11 +522,13 @@ SELECT
   task_description,
   due_date,
   estimated_hours,
-  assigned_by
+  assigned_by,
+  task_status,
+  status_note
 FROM ${tableName}
 ORDER BY id DESC
+`;
 
-  `;
 
   db.query(sql, (err, rows) => {
     if (err) {
