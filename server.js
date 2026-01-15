@@ -78,25 +78,34 @@ app.post("/login", (req, res) => {
 
     const BASE_URL = "https://pixeltruth.com/mis";
 
-    const role = user.Role.trim().toLowerCase();
-    const department = user.Department.trim();
+   const role = (user.Role || "").trim().toLowerCase();
+   const department = (user.Department || "").trim();
+   
+   let redirectUrl = "";
+   
+   // ✅ ONLY HR MANAGER & DIRECTOR → SUPER ADMIN
+   if (role === "hr manager" || role === "director") {
+     redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
+   }
+   
+   // ✅ TEAM LEAD → TL DASHBOARD
+   else if (role === "team lead" || role === "team_lead") {
+     redirectUrl = `${BASE_URL}/TL/${department}/TL_dashboard`;
+   }
+   
+   // ✅ ALL OTHERS → DEPARTMENT DASHBOARD
+   else {
+     if (!department) {
+       // fallback safety
+       return res.json({
+         success: false,
+         message: "Department not assigned. Contact admin."
+       });
+     }
+   
+     redirectUrl = `${BASE_URL}/${department}/dashboard`;
+   }
 
-    let redirectUrl = "";
-
-    // ✅ ONLY HR & DIRECTOR → SUPER ADMIN
-    if (role === "HR Manager" || role === "director") {
-      redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
-    }
-
-    // ✅ TEAM LEAD → TL DASHBOARD
-    else if (role === "team lead" || role === "team_lead") {
-      redirectUrl = `${BASE_URL}/TL/${department}/TL_dashboard`;
-    }
-
-    // ✅ ADMIN / EMPLOYEE / INTERN → DEPARTMENT DASHBOARD
-    else {
-      redirectUrl = `${BASE_URL}/${department}/dashboard`;
-    }
 
     // 🧪 DEBUG (ek baar dekh lo server log me)
     console.log("LOGIN USER:", user.User_Mail);
