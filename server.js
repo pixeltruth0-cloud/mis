@@ -565,6 +565,9 @@ app.get("/getTaskById", (req, res) => {
 /* ======================
    GET MY TASKS (USER SIDE)   <-- 🔥 YAHAN PASTE KARO
 ====================== */
+/* ======================
+   GET MY TASKS (USER SIDE) ✅ FIXED
+====================== */
 app.get("/getMyTasks", (req, res) => {
   if (!db) {
     return res.json({ success: false, data: [] });
@@ -582,11 +585,14 @@ app.get("/getMyTasks", (req, res) => {
 
   const sql = `
     SELECT
+      id,
       task_title,
       task_description,
       due_date,
       estimated_hours,
-      assigned_by
+      assigned_by,
+      task_status,
+      status_note
     FROM ${tableName}
     WHERE user_mail = ?
     ORDER BY id DESC
@@ -601,6 +607,7 @@ app.get("/getMyTasks", (req, res) => {
     res.json({ success: true, data: rows });
   });
 });
+
 /* ======================
    GET USERS (HR) – NON ARCHIVED ONLY
 ====================== */
