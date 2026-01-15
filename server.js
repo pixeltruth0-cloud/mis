@@ -45,54 +45,63 @@ app.get("/", (req, res) => {
 /* ======================
    LOGIN API
 ====================== */
+/* ======================
+   LOGIN API (FINAL FIXED)
+====================== */
 app.post("/login", (req, res) => {
   if (!db) {
     return res.json({ success: false, message: "Database not connected" });
   }
 
-  const { User_Mail, Password, Role, Department } = req.body;
+  const { User_Mail, Password } = req.body;
 
-if (!User_Mail || !Password || !Role) {
-  return res.json({ success: false, message: "Missing fields" });
-}
+  if (!User_Mail || !Password) {
+    return res.json({ success: false, message: "Missing fields" });
+  }
 
+  // 🔥 IMPORTANT: Role ko query se HATA diya
   const sql = `
-    SELECT * FROM mis_user_data
-WHERE User_Mail = ?
-  AND Password = ?
-  AND Role = ?
-  AND is_archived = 0
-LIMIT 1
-
+    SELECT *
+    FROM mis_user_data
+    WHERE User_Mail = ?
+      AND Password = ?
+      AND is_archived = 0
+    LIMIT 1
   `;
 
-  db.query(sql, [User_Mail, Password, Role], (err, rows) => {
+  db.query(sql, [User_Mail, Password], (err, rows) => {
     if (err || rows.length === 0) {
       return res.json({ success: false, message: "Invalid credentials" });
     }
 
     const user = rows[0];
+
     const BASE_URL = "https://pixeltruth.com/mis";
 
     const role = user.Role.trim().toLowerCase();
-   const department = user.Department.trim();
-   
-   let redirectUrl = "";
-   
-   // ✅ ONLY HR & DIRECTOR → SUPER ADMIN
-   if (role === "hr" || role === "director") {
-     redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
-   }
-   
-   // ✅ TEAM LEAD → TL DASHBOARD
-   else if (role === "team lead") {
-     redirectUrl = `${BASE_URL}/TL/${department}/TL_dashboard`;
-   }
-   
-   // ✅ ADMIN / EMPLOYEE / INTERN → DEPARTMENT DASHBOARD
-   else {
-     redirectUrl = `${BASE_URL}/${department}/dashboard`;
-   }
+    const department = user.Department.trim();
+
+    let redirectUrl = "";
+
+    // ✅ ONLY HR & DIRECTOR → SUPER ADMIN
+    if (role === "hr" || role === "director") {
+      redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
+    }
+
+    // ✅ TEAM LEAD → TL DASHBOARD
+    else if (role === "team lead" || role === "team_lead") {
+      redirectUrl = `${BASE_URL}/TL/${department}/TL_dashboard`;
+    }
+
+    // ✅ ADMIN / EMPLOYEE / INTERN → DEPARTMENT DASHBOARD
+    else {
+      redirectUrl = `${BASE_URL}/${department}/dashboard`;
+    }
+
+    // 🧪 DEBUG (ek baar dekh lo server log me)
+    console.log("LOGIN USER:", user.User_Mail);
+    console.log("ROLE:", user.Role);
+    console.log("REDIRECT:", redirectUrl);
 
     return res.json({
       success: true,
@@ -110,6 +119,7 @@ LIMIT 1
     });
   });
 });
+
 /* ======================
    ADD USER (HR) ✅ FIXED
 ====================== */
