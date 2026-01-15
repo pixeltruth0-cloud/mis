@@ -84,7 +84,7 @@ app.post("/login", (req, res) => {
     let redirectUrl = "";
 
     // ✅ ONLY HR & DIRECTOR → SUPER ADMIN
-    if (role === "hr" || role === "director") {
+    if (role === "HR Manager" || role === "director") {
       redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
     }
 
