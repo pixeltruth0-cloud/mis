@@ -565,8 +565,100 @@ app.get("/getTaskById", (req, res) => {
 });
 
 /* ======================
-   GET MY TASKS (USER SIDE)   <-- 🔥 YAHAN PASTE KARO
+   TL DASHBOARD DATA (DEPARTMENT WISE)
 ====================== */
+app.get("/getTLDashboardData", (req, res) => {
+  if (!db) {
+    return res.json({ success: false });
+  }
+
+  const { department } = req.query;
+
+  if (!department) {
+    return res.json({ success: false });
+  }
+
+  const dept = department.trim();
+
+  const tableName =
+    "assigned_tasks_" +
+    dept.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const teamCountSql = `
+    SELECT COUNT(*) AS count
+    FROM mis_user_data
+    WHERE Department = ?
+      AND Role NOT IN ('HR', 'Admin', 'Team_Lead')
+      AND is_archived = 0
+  `;
+
+  const totalTasksSql = `SELECT COUNT(*) AS count FROM ${tableName}`;
+
+  const todayTasksSql = `
+    SELECT COUNT(*) AS count
+    FROM ${tableName}
+    WHERE DATE(created_at) = ?
+  `;
+
+  const pendingSql = `
+    SELECT COUNT(*) AS count
+    FROM ${tableName}
+    WHERE task_status = 'Pending'
+  `;
+
+  const completedSql = `
+    SELECT COUNT(*) AS count
+    FROM ${tableName}
+    WHERE task_status = 'Completed'
+  `;
+
+  db.query(teamCountSql, [dept], (err, teamRows) => {
+    if (err) {
+      console.error("❌ teamCount error:", err.message);
+      return res.json({ success: false });
+    }
+
+    db.query(totalTasksSql, (err, totalRows) => {
+      if (err) {
+        console.error("❌ totalTasks error:", err.message);
+        return res.json({ success: false });
+      }
+
+      db.query(todayTasksSql, [today], (err, todayRows) => {
+        if (err) {
+          console.error("❌ todayTasks error:", err.message);
+          return res.json({ success: false });
+        }
+
+        db.query(pendingSql, (err, pendingRows) => {
+          if (err) {
+            console.error("❌ pendingTasks error:", err.message);
+            return res.json({ success: false });
+          }
+
+          db.query(completedSql, (err, completedRows) => {
+            if (err) {
+              console.error("❌ completedTasks error:", err.message);
+              return res.json({ success: false });
+            }
+
+            res.json({
+              success: true,
+              teamCount: teamRows[0].count,
+              totalTasks: totalRows[0].count,
+              todayTasks: todayRows[0].count,
+              pendingTasks: pendingRows[0].count,
+              completedTasks: completedRows[0].count
+            });
+          });
+        });
+      });
+    });
+  });
+});
+
 /* ======================
    GET MY TASKS (USER SIDE) ✅ FIXED
 ====================== */
