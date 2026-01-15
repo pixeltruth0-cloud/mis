@@ -52,20 +52,21 @@ app.post("/login", (req, res) => {
 
   const { User_Mail, Password, Role, Department } = req.body;
 
-  if (!User_Mail || !Password || !Role || !Department) {
-    return res.json({ success: false, message: "All fields required" });
-  }
+if (!User_Mail || !Password || !Role) {
+  return res.json({ success: false, message: "Missing fields" });
+}
 
   const sql = `
     SELECT * FROM mis_user_data
-    WHERE User_Mail = ?
-      AND Password = ?
-      AND Role = ?
-      AND Department = ?
-    LIMIT 1
+WHERE User_Mail = ?
+  AND Password = ?
+  AND Role = ?
+  AND is_archived = 0
+LIMIT 1
+
   `;
 
-  db.query(sql, [User_Mail, Password, Role, Department], (err, rows) => {
+  db.query(sql, [User_Mail, Password, Role], (err, rows) => {
     if (err || rows.length === 0) {
       return res.json({ success: false, message: "Invalid credentials" });
     }
@@ -75,11 +76,15 @@ app.post("/login", (req, res) => {
 
     let redirectUrl = `${BASE_URL}/${user.Department}/dashboard`;
 
-    if (user.Role === "HR") {
-      redirectUrl = `${BASE_URL}/HR/${user.Department}/HR_dashboard`;
-    } else if (user.Role === "Team_Lead") {
-      redirectUrl = `${BASE_URL}/TL/${user.Department}/TL_dashboard`;
-    }
+   if (user.Role === "Director" || user.Role === "HR") {
+     redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
+   }
+   else if (user.Role === "Team_Lead") {
+     redirectUrl = `${BASE_URL}/TL/${user.Department}/TL_dashboard`;
+   }
+   else {
+     redirectUrl = `${BASE_URL}/${user.Department}/dashboard`;
+   }
 
     return res.json({
       success: true,
@@ -269,7 +274,7 @@ app.get("/getDepartmentData", (req, res) => {
   let params = [];
 
   // 🔥 ADMIN / HR / TL / MANAGER → department data
-if (["ADMIN", "HR", "TEAM_LEAD", "MANAGER"].includes(roleUpper)) {
+if (["ADMIN", "HR", "TEAM_LEAD", "DIRECTOR"].includes(roleUpper)) {
     sql = `
       SELECT *
       FROM social_media_n_website_audit_data
@@ -728,6 +733,30 @@ app.get("/getDepartmentUsers", (req, res) => {
       console.error("❌ getDepartmentUsers error:", err.message);
       return res.json([]);
     }
+    res.json(rows);
+  });
+});
+
+/* ======================
+   SUPER ADMIN DASHBOARD DATA
+====================== */
+app.get("/getSuperAdminDashboardData", (req, res) => {
+  if (!db) return res.json([]);
+
+  const sql = `
+    SELECT 
+      Department,
+      COUNT(*) AS total
+    FROM social_media_n_website_audit_data
+    GROUP BY Department
+  `;
+
+  db.query(sql, (err, rows) => {
+    if (err) {
+      console.error("❌ Super admin dashboard error:", err.message);
+      return res.json([]);
+    }
+
     res.json(rows);
   });
 });
