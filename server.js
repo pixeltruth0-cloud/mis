@@ -740,22 +740,40 @@ app.get("/getDepartmentUsers", (req, res) => {
 /* ======================
    SUPER ADMIN DASHBOARD DATA
 ====================== */
+/* ======================
+   SUPER ADMIN DASHBOARD DATA (FILTERABLE)
+====================== */
 app.get("/getSuperAdminDashboardData", (req, res) => {
   if (!db) return res.json([]);
 
-  const sql = `
-    SELECT 
-      Department,
-      COUNT(*) AS total
-    FROM social_media_n_website_audit_data
-    GROUP BY Department
-  `;
+  const { department } = req.query;
 
-  db.query(sql, (err, rows) => {
+  let sql = `
+    SELECT *
+    FROM social_media_n_website_audit_data
+  `;
+  let params = [];
+
+  // 🔥 dropdown se department aaya ho to filter
+  if (department && department.trim() !== "") {
+    sql += " WHERE TRIM(Department) = ?";
+    params.push(department.trim());
+  }
+
+  sql += " ORDER BY date DESC";
+
+  db.query(sql, params, (err, rows) => {
     if (err) {
       console.error("❌ Super admin dashboard error:", err.message);
       return res.json([]);
     }
+
+    // safety: date fallback
+    rows.forEach(r => {
+      if (!r.date && r.created_at) {
+        r.date = r.created_at;
+      }
+    });
 
     res.json(rows);
   });
