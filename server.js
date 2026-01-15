@@ -74,16 +74,24 @@ LIMIT 1
     const user = rows[0];
     const BASE_URL = "https://pixeltruth.com/mis";
 
-    let redirectUrl = `${BASE_URL}/${user.Department}/dashboard`;
-
-   if (user.Role === "Director" || user.Role === "HR") {
+    const role = user.Role.trim().toLowerCase();
+   const department = user.Department.trim();
+   
+   let redirectUrl = "";
+   
+   // ✅ ONLY HR & DIRECTOR → SUPER ADMIN
+   if (role === "hr" || role === "director") {
      redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
    }
-   else if (user.Role === "Team_Lead") {
-     redirectUrl = `${BASE_URL}/TL/${user.Department}/TL_dashboard`;
+   
+   // ✅ TEAM LEAD → TL DASHBOARD
+   else if (role === "team lead") {
+     redirectUrl = `${BASE_URL}/TL/${department}/TL_dashboard`;
    }
+   
+   // ✅ ADMIN / EMPLOYEE / INTERN → DEPARTMENT DASHBOARD
    else {
-     redirectUrl = `${BASE_URL}/${user.Department}/dashboard`;
+     redirectUrl = `${BASE_URL}/${department}/dashboard`;
    }
 
     return res.json({
