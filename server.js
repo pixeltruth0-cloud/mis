@@ -74,64 +74,46 @@ app.post("/login", (req, res) => {
       return res.json({ success: false, message: "Invalid credentials" });
     }
 
-    const user = rows[0];
-
+  const user = rows[0];
 const BASE_URL = "https://pixeltruth.com/mis";
 
-const role = (user.Role || "").trim().toLowerCase();
-const department = (user.Department || "").trim().toLowerCase();
-
-let redirectUrl = "";
+let redirectUrl = `${BASE_URL}/${user.Department}/dashboard.html`;
 
 /* =========================
    SUPER ADMIN
 ========================= */
-// HR Manager & Director
-if (role === "hr manager" || role === "director") {
+if (user.Role === "Super_Admin") {
   redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
 }
 
 /* =========================
-   ADMIN → HR DEPARTMENT DASHBOARD
+   HR
 ========================= */
-else if (role === "HR") {
-  redirectUrl = `${BASE_URL}/HR/${department}`;
+else if (user.Role === "HR") {
+  redirectUrl = `${BASE_URL}/HR/${user.Department}/HR_dashboard.html`;
 }
 
 /* =========================
    TEAM LEAD
 ========================= */
-else if (role === "team lead" || role === "team_lead") {
-  if (!department) {
-    return res.json({
-      success: false,
-      message: "Department not assigned. Contact admin."
-    });
-  }
-  redirectUrl = `${BASE_URL}/TL/${department}/TL_dashboard`;
+else if (user.Role === "Team_Lead") {
+  redirectUrl = `${BASE_URL}/TL/${user.Department}/TL_dashboard.html`;
 }
 
-/* =========================
-   OTHER USERS
-========================= */
-else {
-  if (!department) {
-    return res.json({
-      success: false,
-      message: "Department not assigned. Contact admin."
-    });
-  }
-  redirectUrl = `${BASE_URL}/${department}/dashboard`;
-}
-
-/* =========================
-   FINAL RESPONSE
-========================= */
 return res.json({
   success: true,
-  redirectUrl
+  redirectUrl,
+  user: {
+    User_Name: user.User_Name,
+    User_Mail: user.User_Mail,
+    Role: user.Role,
+    Department: user.Department,
+    Employee_ID: user.Employee_ID || null,
+    Designation: user.Designation || null,
+    Phone_Number: user.Phone_Number || null,
+    Reporting_Person: user.Reporting_Person || null
+  }
 });
-
 
     // 🧪 DEBUG (ek baar dekh lo server log me)
     console.log("LOGIN USER:", user.User_Mail);
