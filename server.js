@@ -375,10 +375,8 @@ app.get("/getUsersByDepartment", (req, res) => {
 });
 
 
+// ================= ASSIGN TASK =================
 app.post("/assignTask", (req, res) => {
-  if (!db) {
-    return res.json({ success: false, message: "DB not connected" });
-  }
 
   const {
     user_name,
@@ -387,23 +385,24 @@ app.post("/assignTask", (req, res) => {
     task_description,
     due_date,
     estimated_hours,
+    priority,              // ✅ NEW
     department,
     assigned_by
   } = req.body;
 
-  if (!user_mail || !task_title || !due_date || !department || !assigned_by) {
-    return res.json({ success: false, message: "Missing fields" });
+  // 🔒 Basic validation
+  if (!user_name || !user_mail || !task_title || !due_date || !priority || !department) {
+    return res.json({
+      success: false,
+      message: "Missing required fields"
+    });
   }
 
-  const tableName =
-    "assigned_tasks_" +
-    department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-
   const sql = `
-    INSERT INTO ${tableName}
+    INSERT INTO tasks
     (user_name, user_mail, task_title, task_description,
-     due_date, estimated_hours, assigned_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+     due_date, estimated_hours, priority, department, assigned_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const values = [
@@ -413,18 +412,29 @@ app.post("/assignTask", (req, res) => {
     task_description || "",
     due_date,
     estimated_hours || 0,
+    priority,          // ✅ SAVED
+    department,
     assigned_by
   ];
 
-  db.query(sql, values, (err) => {
+  db.query(sql, values, (err, result) => {
+
     if (err) {
-      console.error("❌ Assign task error:", err.message);
-      return res.json({ success: false });
+      console.error("Assign Task Error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Database error"
+      });
     }
 
-    res.json({ success: true });
+    return res.json({
+      success: true,
+      message: "Task assigned successfully",
+      task_id: result.insertId
+    });
   });
 });
+
 app.post("/updateTaskStatus", (req, res) => {
 
   if (!db) return res.json({ success:false });
