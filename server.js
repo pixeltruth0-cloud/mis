@@ -387,11 +387,11 @@ app.post("/assignTask", (req, res) => {
     due_date,
     estimated_hours,
     priority,
-    department,
     assigned_by
   } = req.body;
 
-  if (!user_name || !user_mail || !task_title || !due_date || !priority || !department) {
+  // 🔒 Validation
+  if (!user_name || !user_mail || !task_title || !due_date || !priority) {
     return res.json({
       success: false,
       message: "Missing required fields"
@@ -401,8 +401,8 @@ app.post("/assignTask", (req, res) => {
   const sql = `
     INSERT INTO assigned_tasks_social_media_n_website_audit
     (user_name, user_mail, task_title, task_description,
-     due_date, estimated_hours, priority, department, assigned_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     due_date, estimated_hours, priority, assigned_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const values = [
@@ -413,7 +413,6 @@ app.post("/assignTask", (req, res) => {
     due_date,
     estimated_hours || 0,
     priority,
-    department,
     assigned_by
   ];
 
