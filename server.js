@@ -548,9 +548,6 @@ app.post("/deleteTask", (req, res) => {
 /* ======================
    GET ASSIGNED TASKS (DEPT WISE)
 ====================== */
-//* ======================
-   GET ASSIGNED TASKS (DEPT WISE)
-====================== */
 app.get("/getAssignedTasks", (req, res) => {
 
   if (!db) {
@@ -563,12 +560,9 @@ app.get("/getAssignedTasks", (req, res) => {
     return res.json({ success: false, data: [] });
   }
 
-  // 🔥 Same table naming logic as assignTask
   const tableName =
     "assigned_tasks_" +
-    department
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_");
+    department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
   const sql = `
     SELECT
@@ -600,6 +594,7 @@ app.get("/getAssignedTasks", (req, res) => {
     });
   });
 });
+
 
 
 app.get("/getTaskById", (req, res) => {
