@@ -76,35 +76,61 @@ app.post("/login", (req, res) => {
 
     const user = rows[0];
 
-    const BASE_URL = "https://pixeltruth.com/mis";
+const BASE_URL = "https://pixeltruth.com/mis";
 
-   const role = (user.Role || "").trim().toLowerCase();
-   const department = (user.Department || "").trim();
-   
-   let redirectUrl = "";
-   
-   // ✅ ONLY HR MANAGER & DIRECTOR → SUPER ADMIN
-   if (role === "hr manager" || role === "director") {
-     redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
-   }
-   
-   // ✅ TEAM LEAD → TL DASHBOARD
-   else if (role === "team lead" || role === "team_lead") {
-     redirectUrl = `${BASE_URL}/TL/${department}/TL_dashboard`;
-   }
-   
-   // ✅ ALL OTHERS → DEPARTMENT DASHBOARD
-   else {
-     if (!department) {
-       // fallback safety
-       return res.json({
-         success: false,
-         message: "Department not assigned. Contact admin."
-       });
-     }
-   
-     redirectUrl = `${BASE_URL}/${department}/dashboard`;
-   }
+const role = (user.Role || "").trim().toLowerCase();
+const department = (user.Department || "").trim().toLowerCase();
+
+let redirectUrl = "";
+
+/* =========================
+   SUPER ADMIN
+========================= */
+// HR Manager & Director
+if (role === "hr manager" || role === "director") {
+  redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
+}
+
+/* =========================
+   ADMIN → HR DEPARTMENT DASHBOARD
+========================= */
+else if (role === "admin") {
+  redirectUrl = `${BASE_URL}/HR/${department}`;
+}
+
+/* =========================
+   TEAM LEAD
+========================= */
+else if (role === "team lead" || role === "team_lead") {
+  if (!department) {
+    return res.json({
+      success: false,
+      message: "Department not assigned. Contact admin."
+    });
+  }
+  redirectUrl = `${BASE_URL}/TL/${department}/TL_dashboard`;
+}
+
+/* =========================
+   OTHER USERS
+========================= */
+else {
+  if (!department) {
+    return res.json({
+      success: false,
+      message: "Department not assigned. Contact admin."
+    });
+  }
+  redirectUrl = `${BASE_URL}/${department}/dashboard`;
+}
+
+/* =========================
+   FINAL RESPONSE
+========================= */
+return res.json({
+  success: true,
+  redirectUrl
+});
 
 
     // 🧪 DEBUG (ek baar dekh lo server log me)
