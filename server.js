@@ -762,12 +762,13 @@ app.get("/getMyTasks", (req, res) => {
       task_description,
       due_date,
       estimated_hours,
+      priority,          -- ✅ PRIORITY INCLUDED
       assigned_by,
       task_status,
       status_note
     FROM ${tableName}
-    WHERE user_mail = ?
-    ORDER BY id DESC
+    WHERE user_mail = ?          -- ✅ VERY IMPORTANT
+    ORDER BY due_date ASC
   `;
 
   db.query(sql, [user_mail], (err, rows) => {
@@ -779,6 +780,7 @@ app.get("/getMyTasks", (req, res) => {
     res.json({ success: true, data: rows });
   });
 });
+
 
 /* ======================
    GET USERS (HR) – NON ARCHIVED ONLY
