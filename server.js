@@ -376,14 +376,14 @@ app.get("/getUsersByDepartment", (req, res) => {
 
 
 // ================= ASSIGN TASK =================
-// ================= ASSIGN TASK (DYNAMIC TABLE) =================
 app.post("/assignTask", (req, res) => {
 
-  if (!db) return res.json({ success: false });
+  if (!db) {
+    return res.json({ success: false, message: "DB not connected" });
+  }
 
   const {
-    user_name,
-    user_mail,
+    users,                 // 🔥 ARRAY
     task_title,
     task_description,
     due_date,
@@ -393,7 +393,10 @@ app.post("/assignTask", (req, res) => {
     assigned_by
   } = req.body;
 
-  if (!user_name || !user_mail || !task_title || !due_date || !priority || !department) {
+  if (
+    !users || !Array.isArray(users) || users.length === 0 ||
+    !task_title || !due_date || !priority || !department
+  ) {
     return res.json({
       success: false,
       message: "Missing required fields"
@@ -406,38 +409,58 @@ app.post("/assignTask", (req, res) => {
 
   const sql = `
     INSERT INTO ${tableName}
-    (user_name, user_mail, task_title, task_description,
-     due_date, estimated_hours, priority, assigned_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    (
+      user_name,
+      user_mail,
+      task_title,
+      task_description,
+      due_date,
+      estimated_hours,
+      priority,
+      assigned_by,
+      assigned_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
   `;
 
-  const values = [
-    user_name,
-    user_mail,
-    task_title,
-    task_description || "",
-    due_date,
-    estimated_hours || 0,
-    priority,
-    assigned_by
-  ];
+  let inserted = 0;
+  let hasError = false;
 
-  db.query(sql, values, (err, result) => {
-    if (err) {
-      console.error("Assign Task Error:", err.message);
-      return res.status(500).json({
-        success: false,
-        message: "Database error"
-      });
-    }
+  users.forEach(u => {
 
-    res.json({
-      success: true,
-      task_id: result.insertId
+    const values = [
+      u.user_name,
+      u.user_mail,
+      task_title,
+      task_description || "",
+      due_date,
+      estimated_hours || 0,
+      priority,
+      assigned_by
+    ];
+
+    db.query(sql, values, err => {
+
+      if (err) {
+        console.error("❌ Bulk assign error:", err.message);
+        hasError = true;
+      }
+
+      inserted++;
+
+      // jab sab users insert ho jaaye
+      if (inserted === users.length) {
+        if (hasError) {
+          return res.json({
+            success: false,
+            message: "Some tasks failed to assign"
+          });
+        }
+        return res.json({ success: true });
+      }
     });
   });
 });
-;
 
 
 app.post("/updateTaskStatus", (req, res) => {
