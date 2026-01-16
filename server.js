@@ -79,10 +79,8 @@ const BASE_URL = "https://pixeltruth.com/mis";
 
 let redirectUrl = `${BASE_URL}/${user.Department}/dashboard.html`;
 
-/* =========================
-   SUPER ADMIN
-========================= */
-if (user.Role === "Super_Admin") {
+
+if (user.Role === "Director" || user.Role === "HR Manager") {
   redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
 }
 
