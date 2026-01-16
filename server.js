@@ -94,7 +94,7 @@ if (role === "hr manager" || role === "director") {
 /* =========================
    ADMIN → HR DEPARTMENT DASHBOARD
 ========================= */
-else if (role === "admin") {
+else if (role === "HR") {
   redirectUrl = `${BASE_URL}/HR/${department}`;
 }
 
