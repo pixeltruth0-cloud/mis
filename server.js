@@ -376,6 +376,7 @@ app.get("/getUsersByDepartment", (req, res) => {
 
 
 // ================= ASSIGN TASK =================
+// ================= ASSIGN TASK =================
 app.post("/assignTask", (req, res) => {
 
   const {
@@ -385,12 +386,11 @@ app.post("/assignTask", (req, res) => {
     task_description,
     due_date,
     estimated_hours,
-    priority,              // ✅ NEW
+    priority,
     department,
     assigned_by
   } = req.body;
 
-  // 🔒 Basic validation
   if (!user_name || !user_mail || !task_title || !due_date || !priority || !department) {
     return res.json({
       success: false,
@@ -399,7 +399,7 @@ app.post("/assignTask", (req, res) => {
   }
 
   const sql = `
-    INSERT INTO tasks
+    INSERT INTO assigned_tasks_social_media_n_website_audit
     (user_name, user_mail, task_title, task_description,
      due_date, estimated_hours, priority, department, assigned_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -412,13 +412,12 @@ app.post("/assignTask", (req, res) => {
     task_description || "",
     due_date,
     estimated_hours || 0,
-    priority,          // ✅ SAVED
+    priority,
     department,
     assigned_by
   ];
 
   db.query(sql, values, (err, result) => {
-
     if (err) {
       console.error("Assign Task Error:", err);
       return res.status(500).json({
@@ -434,6 +433,7 @@ app.post("/assignTask", (req, res) => {
     });
   });
 });
+
 
 app.post("/updateTaskStatus", (req, res) => {
 
