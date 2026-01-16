@@ -542,53 +542,71 @@ app.post("/deleteTask", (req, res) => {
 /* ======================
    GET ASSIGNED TASKS (DEPT WISE)
 ====================== */
-app.get("/getAssignedTasks", (req, res) => {
-  if (!db) {
-    return res.json({ success: false, message: "DB not connected" });
+// ================= ASSIGN TASK (DYNAMIC TABLE) =================
+app.post("/assignTask", (req, res) => {
+
+  if (!db) return res.json({ success: false });
+
+  const {
+    user_name,
+    user_mail,
+    task_title,
+    task_description,
+    due_date,
+    estimated_hours,
+    priority,
+    department,          // ✅ REQUIRED
+    assigned_by
+  } = req.body;
+
+  // 🔒 Validation
+  if (!user_name || !user_mail || !task_title || !due_date || !priority || !department) {
+    return res.json({
+      success: false,
+      message: "Missing required fields"
+    });
   }
 
-  const { department } = req.query;
-
-  if (!department) {
-    return res.json({ success: false, message: "Department required" });
-  }
-
-  // 🔥 Same table naming logic as assignTask
+  // 🔥 DYNAMIC TABLE NAME (SAME LOGIC EVERYWHERE)
   const tableName =
     "assigned_tasks_" +
-    department
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_");
+    department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
   const sql = `
-SELECT 
-  id,
-  user_name,
-  user_mail,
-  task_title,
-  task_description,
-  due_date,
-  estimated_hours,
-  assigned_by,
-  task_status,
-  status_note
-FROM ${tableName}
-ORDER BY id DESC
-`;
+    INSERT INTO ${tableName}
+    (user_name, user_mail, task_title, task_description,
+     due_date, estimated_hours, priority, assigned_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `;
 
+  const values = [
+    user_name,
+    user_mail,
+    task_title,
+    task_description || "",
+    due_date,
+    estimated_hours || 0,
+    priority,
+    assigned_by
+  ];
 
-  db.query(sql, (err, rows) => {
+  db.query(sql, values, (err, result) => {
     if (err) {
-      console.error("❌ Get assigned tasks error:", err.message);
-      return res.json({ success: false, data: [] });
+      console.error("Assign Task Error:", err.message);
+      return res.status(500).json({
+        success: false,
+        message: "Database error"
+      });
     }
 
-    res.json({
+    return res.json({
       success: true,
-      data: rows
+      message: "Task assigned successfully",
+      task_id: result.insertId
     });
   });
 });
+
 app.get("/getTaskById", (req, res) => {
   if (!db) return res.json({});
 
