@@ -16,6 +16,21 @@ app.use(cors({
   credentials: true
 }));
 
+app.set("trust proxy", 1);
+
+app.use(session({
+  name: "pixeltruth.sid",
+  secret: "pixeltruth_secret_123",
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: true,       // Render = HTTPS
+    sameSite: "none",   // cross domain
+    maxAge: 1000 * 60 * 60 * 24
+  }
+}));
+
+
  // simple CORS (no credentials)
 app.use(express.json());
 
@@ -49,22 +64,7 @@ app.get("/", (req, res) => {
 /* ======================
    GET LOGGED IN USER INFO
 ====================== */
-app.get("/getUserInfo", (req, res) => {
-  if (!req.session || !req.session.user) {
-    return res.status(401).json({ message: "Not logged in" });
-  }
 
-  app.use(session({
-  secret: "pixeltruth_secret_123",
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: true,
-    sameSite: "none"
-  }
-}));
-
-});
 
 /* ======================
    LOGIN API (FINAL FIXED)
