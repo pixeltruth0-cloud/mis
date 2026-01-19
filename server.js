@@ -1,9 +1,12 @@
+const express = require("express");   // ✅ ADD THIS LINE
 const session = require("express-session");
 const mysql = require("mysql2");
 const cors = require("cors");
 const multer = require("multer");
+
 const app = express();
 const upload = multer();
+;
 
 /* ======================
    Middleware
