@@ -352,25 +352,26 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
   const finalBrand =
     brand === "Other" ? other_brand : brand;
 
-  const sql = `
-    INSERT INTO brand_infringement
-    (
-      user_name,
-      user_mail,
-      department,
-      role,
-      brand,
-      other_brand,
-      channel,
-      sub_channel,
-      categories,
-      type_of_work,
-      count,
-      date,
-      remark
-    )
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-  `;
+  const {
+  user_name,
+  user_mail,
+  department,
+  role,
+  brand,
+  other_brand,
+  channel,
+  sub_channel,
+  categories,
+  type_of_work,
+  count,
+  date,
+  remark,
+
+  task_hours,       // ✅ NEW
+  task_minutes,     // ✅ NEW
+  rotation          // ✅ NEW
+} = req.body;
+
 
   const values = [
     user_name,
@@ -385,8 +386,11 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
     type_of_work,
     count,
     date,
-    remark
-  ];
+    remark,
+       hours,
+  minutes,
+  rotation
+];
 
   db.query(sql, values, err => {
     if (err) {
