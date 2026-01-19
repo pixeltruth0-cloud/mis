@@ -325,64 +325,7 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
 /* ======================
    BRAND INFRINGEMENT SUBMIT
 ====================== */
-app.post("/submitBrandInfringement", upload.none(), (req, res) => {
-
- const {
-  user_name,
-  user_mail,
-  department,
-  role,
-  brand,
-  other_brand,
-  channel,
-  sub_channel,
-  categories,
-  type_of_work,
-  count,
-  date,
-  remark,
-
-  hours,
-  minutes,
-  rotation
-} = req.body;
-
-  if (!user_mail) {
-    return res.json({ success: false, message: "User missing" });
-  }
-
-  const finalBrand =
-    brand === "Other" ? other_brand : brand;
-
-  const values = [
-    user_name,
-    user_mail,
-    department,
-    role,
-    finalBrand,
-    other_brand || null,
-    channel,
-    sub_channel,
-    categories,
-    type_of_work,
-    count,
-    date,
-    remark,
-       hours,
-  minutes,
-  rotation
-];
-
-  db.query(sql, values, err => {
-    if (err) {
-      console.error("❌ BI insert error:", err.message);
-      return res.json({ success: false });
-    }
-
-    res.json({ success: true });
-  });
-});
-
+app.post("/submitBrandInfringement"
 
 
 /* ======================
