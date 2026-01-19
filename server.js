@@ -18,14 +18,17 @@ app.use(cors({
 
 app.set("trust proxy", 1);
 
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 app.use(session({
   name: "pixeltruth.sid",
   secret: "pixeltruth_secret_123",
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: true,       // Render = HTTPS
-    sameSite: "none",   // cross domain
+    secure: true,
+    sameSite: "none",
     maxAge: 1000 * 60 * 60 * 24
   }
 }));
@@ -33,6 +36,7 @@ app.use(session({
 
  // simple CORS (no credentials)
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 /* ======================
    Database Connection
