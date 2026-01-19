@@ -1,4 +1,4 @@
-const express = require("express");
+const session = require("express-session");
 const mysql = require("mysql2");
 const cors = require("cors");
 const multer = require("multer");
@@ -43,8 +43,16 @@ app.get("/", (req, res) => {
 });
 
 /* ======================
-   LOGIN API
+   GET LOGGED IN USER INFO
 ====================== */
+app.get("/getUserInfo", (req, res) => {
+  if (!req.session || !req.session.user) {
+    return res.status(401).json({ message: "Not logged in" });
+  }
+
+  res.json(req.session.user);
+});
+
 /* ======================
    LOGIN API (FINAL FIXED)
 ====================== */
@@ -75,6 +83,17 @@ app.post("/login", (req, res) => {
     }
 
   const user = rows[0];
+     req.session.user = {
+     User_Name: user.User_Name,
+     User_Mail: user.User_Mail,
+     Role: user.Role,
+     Department: user.Department,
+     Employee_ID: user.Employee_ID,
+     Designation: user.Designation,
+     Phone_Number: user.Phone_Number,
+     Reporting_Person: user.Reporting_Person
+   };
+
 const BASE_URL = "https://pixeltruth.com/mis";
 
 let redirectUrl = `${BASE_URL}/${user.Department}/dashboard.html`;
@@ -291,35 +310,74 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
 /* ======================
    BRAND INFRINGEMENT SUBMIT
 ====================== */
-app.post("/submitBrandInfringement", upload.none(), (req, res) => {
+app.post("/submitBrandInfringement", (req, res) => {
 
-  if (!db) {
-    return res.json({ success: false });
+  const {
+    brand,
+    other_brand,
+    channel,
+    sub_channel,
+    categories,
+    type_of_work,
+    count,
+    date,
+    remark
+  } = req.body;
+
+  const user = req.session.user;
+
+  if (!user) {
+    return res.json({ success: false, message: "Not logged in" });
   }
 
-  const data = req.body;
-
-  data.Department = "Brand_Infringement";
-
-  const columns = Object.keys(data);
-  const values = Object.values(data);
-  const placeholders = columns.map(() => "?").join(",");
+  const finalBrand =
+    brand === "Other" ? other_brand : brand;
 
   const sql = `
     INSERT INTO brand_infringement
-    (${columns.join(",")})
-    VALUES (${placeholders})
+    (
+      user_name,
+      user_mail,
+      department,
+      role,
+      brand,
+      other_brand,
+      channel,
+      sub_channel,
+      categories,
+      type_of_work,
+      count,
+      date,
+      remark
+    )
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
   `;
+
+  const values = [
+    user.User_Name,
+    user.User_Mail,
+    user.Department,
+    user.Role,
+    finalBrand,
+    other_brand || null,
+    channel,
+    sub_channel,
+    categories,
+    type_of_work,
+    count,
+    date,
+    remark
+  ];
 
   db.query(sql, values, (err) => {
     if (err) {
-      console.error("❌ BI insert error:", err.message);
+      console.error(err);
       return res.json({ success: false });
     }
-
     res.json({ success: true });
   });
 });
+
 
 
 /* ======================
