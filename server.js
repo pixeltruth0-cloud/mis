@@ -70,9 +70,7 @@ app.get("/", (req, res) => {
 ====================== */
 
 
-/* ======================
-   LOGIN API (FINAL FIXED)
-====================== */
+
 app.post("/login", (req, res) => {
   if (!db) {
     return res.json({ success: false, message: "Database not connected" });
