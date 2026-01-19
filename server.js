@@ -327,30 +327,7 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
 ====================== */
 app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 
-  const {
-    user_name,
-    user_mail,
-    department,
-    role,
-    brand,
-    other_brand,
-    channel,
-    sub_channel,
-    categories,
-    type_of_work,
-    count,
-    date,
-    remark
-  } = req.body;
-
-  if (!user_mail) {
-    return res.json({ success: false, message: "User missing" });
-  }
-
-  const finalBrand =
-    brand === "Other" ? other_brand : brand;
-
-  const {
+ const {
   user_name,
   user_mail,
   department,
@@ -365,11 +342,17 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
   date,
   remark,
 
-  task_hours,       // ✅ NEW
-  task_minutes,     // ✅ NEW
-  rotation          // ✅ NEW
+  hours,
+  minutes,
+  rotation
 } = req.body;
 
+  if (!user_mail) {
+    return res.json({ success: false, message: "User missing" });
+  }
+
+  const finalBrand =
+    brand === "Other" ? other_brand : brand;
 
   const values = [
     user_name,
