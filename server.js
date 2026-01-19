@@ -288,6 +288,38 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
   });
 });
 
+/* ======================
+   BRAND INFRINGEMENT SUBMIT
+====================== */
+app.post("/submitBrandInfringement", upload.none(), (req, res) => {
+
+  if (!db) {
+    return res.json({ success: false });
+  }
+
+  const data = req.body;
+
+  data.Department = "Brand_Infringement";
+
+  const columns = Object.keys(data);
+  const values = Object.values(data);
+  const placeholders = columns.map(() => "?").join(",");
+
+  const sql = `
+    INSERT INTO brand_infringement
+    (${columns.join(",")})
+    VALUES (${placeholders})
+  `;
+
+  db.query(sql, values, (err) => {
+    if (err) {
+      console.error("❌ BI insert error:", err.message);
+      return res.json({ success: false });
+    }
+
+    res.json({ success: true });
+  });
+});
 
 
 /* ======================
@@ -341,6 +373,55 @@ if (["ADMIN", "HR", "TEAM_LEAD", "DIRECTOR"].includes(roleUpper)) {
 res.json(rows);
   });
 });
+
+/* ======================
+   BRAND INFRINGEMENT DASHBOARD
+====================== */
+app.get("/getBrandInfringementData", (req, res) => {
+
+  if (!db) return res.json([]);
+
+  const { user_mail, role } = req.query;
+
+  if (!user_mail || !role) return res.json([]);
+
+  const roleUpper = role.trim().toUpperCase();
+
+  let sql = "";
+  let params = [];
+
+  if (["ADMIN", "HR", "TEAM_LEAD", "DIRECTOR"].includes(roleUpper)) {
+    sql = `
+      SELECT *
+      FROM brand_infringement
+      ORDER BY date DESC
+    `;
+  } else {
+    sql = `
+      SELECT *
+      FROM brand_infringement
+      WHERE user_mail = ?
+      ORDER BY date DESC
+    `;
+    params = [user_mail];
+  }
+
+  db.query(sql, params, (err, rows) => {
+    if (err) {
+      console.error("❌ BI dashboard error:", err.message);
+      return res.json([]);
+    }
+
+    rows.forEach(r => {
+      if (!r.date && r.created_at) {
+        r.date = r.created_at;
+      }
+    });
+
+    res.json(rows);
+  });
+});
+
    
 app.get("/getUsersByDepartment", (req, res) => {
   if (!db) return res.json([]);
