@@ -12,9 +12,10 @@ const upload = multer();
    Middleware
 ====================== */
 app.use(cors({
-  origin: "*",
+  origin: "https://pixeltruth.com",
   credentials: true
 }));
+
  // simple CORS (no credentials)
 app.use(express.json());
 
@@ -53,7 +54,16 @@ app.get("/getUserInfo", (req, res) => {
     return res.status(401).json({ message: "Not logged in" });
   }
 
-  res.json(req.session.user);
+  app.use(session({
+  secret: "pixeltruth_secret_123",
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: true,
+    sameSite: "none"
+  }
+}));
+
 });
 
 /* ======================
