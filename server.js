@@ -327,9 +327,13 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
 /* ======================
    BRAND INFRINGEMENT SUBMIT
 ====================== */
-app.post("/submitBrandInfringement", (req, res) => {
+app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 
   const {
+    user_name,
+    user_mail,
+    department,
+    role,
     brand,
     other_brand,
     channel,
@@ -341,10 +345,8 @@ app.post("/submitBrandInfringement", (req, res) => {
     remark
   } = req.body;
 
-  const user = req.session.user;
-
-  if (!user) {
-    return res.json({ success: false, message: "Not logged in" });
+  if (!user_mail) {
+    return res.json({ success: false, message: "User missing" });
   }
 
   const finalBrand =
@@ -371,10 +373,10 @@ app.post("/submitBrandInfringement", (req, res) => {
   `;
 
   const values = [
-    user.User_Name,
-    user.User_Mail,
-    user.Department,
-    user.Role,
+    user_name,
+    user_mail,
+    department,
+    role,
     finalBrand,
     other_brand || null,
     channel,
@@ -386,11 +388,12 @@ app.post("/submitBrandInfringement", (req, res) => {
     remark
   ];
 
-  db.query(sql, values, (err) => {
+  db.query(sql, values, err => {
     if (err) {
-      console.error(err);
+      console.error("❌ BI insert error:", err.message);
       return res.json({ success: false });
     }
+
     res.json({ success: true });
   });
 });
