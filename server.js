@@ -325,8 +325,58 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
 /* ======================
    BRAND INFRINGEMENT SUBMIT
 ====================== */
-app.post("/submitBrandInfringement"
+/* ======================
+   BRAND INFRINGEMENT SUBMIT
+====================== */
+app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 
+  if (!db) {
+    return res.json({
+      success: false,
+      message: "Database not connected"
+    });
+  }
+
+  const data = req.body;
+
+  if (!data || Object.keys(data).length === 0) {
+    return res.json({
+      success: false,
+      message: "No data received"
+    });
+  }
+
+  // ❌ unwanted fields remove
+  delete data.id;
+  delete data.insert_id;
+  delete data.created_at;
+
+  const columns = Object.keys(data);
+  const values = Object.values(data);
+
+  const placeholders = columns.map(() => "?").join(",");
+
+  const sql = `
+    INSERT INTO brand_infringement
+    (${columns.join(",")})
+    VALUES (${placeholders})
+  `;
+
+  db.query(sql, values, (err) => {
+    if (err) {
+      console.error("❌ Brand Infringement Insert Error:", err.message);
+      return res.json({
+        success: false,
+        message: "Insert failed"
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Brand infringement submitted successfully"
+    });
+  });
+});
 
 /* ======================
    DASHBOARD DATA (ROLE BASED - QUERY)
