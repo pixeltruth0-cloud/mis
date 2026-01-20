@@ -337,15 +337,20 @@ app.get("/getDepartmentData", (req, res) => {
   const { user_mail, role, department } = req.query;
   if (!user_mail || !role || !department) return res.json([]);
 
-  const roleUpper = role.trim().toUpperCase();
+  const roleUpper = role
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_");
+
   const dept = department.trim();
   const userMail = user_mail.trim();
 
   let sql = "";
   let params = [];
 
-  // 🔥 ADMIN / HR / TL / MANAGER → department data
-if (["ADMIN", "HR", "TEAM_LEAD", "DIRECTOR"].includes(roleUpper)) {
+  // ✅ ADMIN / HR / TL / DIRECTOR → department data
+  if (["ADMIN", "HR", "TEAM_LEAD", "DIRECTOR", "HR_MANAGER"].includes(roleUpper)) {
+
     sql = `
       SELECT *
       FROM social_media_n_website_audit_data
@@ -353,16 +358,19 @@ if (["ADMIN", "HR", "TEAM_LEAD", "DIRECTOR"].includes(roleUpper)) {
       ORDER BY date DESC
     `;
     params = [dept];
+
   } 
-  // 👤 EMPLOYEE → own data
+  // 👤 EMPLOYEE → only own department data
   else {
+
     sql = `
       SELECT *
       FROM social_media_n_website_audit_data
       WHERE user_mail = ?
+        AND TRIM(department) = ?
       ORDER BY date DESC
     `;
-      params = [userMail];
+    params = [userMail, dept];
   }
 
   db.query(sql, params, (err, rows) => {
@@ -370,15 +378,17 @@ if (["ADMIN", "HR", "TEAM_LEAD", "DIRECTOR"].includes(roleUpper)) {
       console.error("❌ DB Error:", err.message);
       return res.json([]);
     }
-    rows.forEach(r => {
-  if (!r.date && r.created_at) {
-    r.date = r.created_at;
-  }
-});
 
-res.json(rows);
+    rows.forEach(r => {
+      if (!r.date && r.created_at) {
+        r.date = r.created_at;
+      }
+    });
+
+    res.json(rows);
   });
 });
+
 
 /* ======================
    BRAND INFRINGEMENT DASHBOARD
