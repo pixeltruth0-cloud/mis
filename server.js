@@ -128,6 +128,9 @@ db.query(deptSql, [user.User_Mail], (err, deptRows) => {
     Phone_Number: user.Phone_Number,
     Reporting_Person: user.Reporting_Person
   };
+    });   // ✅ outer db.query close
+});       // ✅ app.post("/login") close
+
 
   const BASE_URL = "https://pixeltruth.com/mis";
   let redirectUrl = "";
