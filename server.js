@@ -98,74 +98,67 @@ app.post("/login", (req, res) => {
     }
 
   const user = rows[0];
-     req.session.user = {
-     User_Name: user.User_Name,
-     User_Mail: user.User_Mail,
-     Role: user.Role,
-     Department: user.Department,
-     Employee_ID: user.Employee_ID,
-     Designation: user.Designation,
-     Phone_Number: user.Phone_Number,
-     Reporting_Person: user.Reporting_Person
-   };
+// 🔥 STEP 1: check multi-department access
+const deptSql = `
+  SELECT department
+  FROM user_departments
+  WHERE user_mail = ?
+`;
 
-const BASE_URL = "https://pixeltruth.com/mis";
+db.query(deptSql, [user.User_Mail], (err, deptRows) => {
 
-let redirectUrl = `${BASE_URL}/${user.Department}/dashboard.html`;
+  let departments = [];
 
+  if (!err && deptRows.length > 0) {
+    // ✅ SPECIAL USER (MULTI DEPARTMENT)
+    departments = deptRows.map(d => d.department);
+  } else {
+    // 👤 NORMAL USER
+    departments = [user.Department];
+  }
 
-if (user.Role === "Director" || user.Role === "HR Manager") {
-  redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
-}
-
-/* =========================
-   HR
-========================= */
-else if (user.Role === "HR") {
-  redirectUrl = `${BASE_URL}/HR/${user.Department}/HR_dashboard.html`;
-}
-
-/* =========================
-   TEAM LEAD
-========================= */
-else if (user.Role === "Team_Lead") {
-  redirectUrl = `${BASE_URL}/TL/${user.Department}/TL_dashboard.html`;
-}
-
-return res.json({
-  success: true,
-  redirectUrl,
-  user: {
+  // 🔐 SESSION UPDATE
+  req.session.user = {
     User_Name: user.User_Name,
     User_Mail: user.User_Mail,
     Role: user.Role,
-    Department: user.Department,
-    Employee_ID: user.Employee_ID || null,
-    Designation: user.Designation || null,
-    Phone_Number: user.Phone_Number || null,
-    Reporting_Person: user.Reporting_Person || null
+    Departments: departments,   // 🔥 IMPORTANT CHANGE
+    Employee_ID: user.Employee_ID,
+    Designation: user.Designation,
+    Phone_Number: user.Phone_Number,
+    Reporting_Person: user.Reporting_Person
+  };
+
+  const BASE_URL = "https://pixeltruth.com/mis";
+  let redirectUrl = "";
+
+  // 🔁 NORMAL vs MULTI-DEPT
+  if (departments.length === 1) {
+    redirectUrl = `${BASE_URL}/${departments[0]}/dashboard.html`;
+  } else {
+    redirectUrl = `${BASE_URL}/select-department.html`;
   }
-});
 
-    // 🧪 DEBUG (ek baar dekh lo server log me)
-    console.log("LOGIN USER:", user.User_Mail);
-    console.log("ROLE:", user.Role);
-    console.log("REDIRECT:", redirectUrl);
+  // 🔐 ROLE OVERRIDES (same logic as before)
+  if (user.Role === "Director" || user.Role === "HR Manager") {
+    redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
+  } 
+  else if (user.Role === "HR") {
+    redirectUrl = `${BASE_URL}/HR/${departments[0]}/HR_dashboard.html`;
+  } 
+  else if (user.Role === "Team_Lead") {
+    redirectUrl = `${BASE_URL}/TL/${departments[0]}/TL_dashboard.html`;
+  }
 
-    return res.json({
-      success: true,
-      redirectUrl,
-      user: {
-        User_Name: user.User_Name,
-        User_Mail: user.User_Mail,
-        Role: user.Role,
-        Department: user.Department,
-        Employee_ID: user.Employee_ID || null,
-        Designation: user.Designation || null,
-        Phone_Number: user.Phone_Number || null,
-        Reporting_Person: user.Reporting_Person || null
-      }
-    });
+  return res.json({
+    success: true,
+    redirectUrl,
+    user: {
+      User_Name: user.User_Name,
+      User_Mail: user.User_Mail,
+      Role: user.Role,
+      Departments: departments
+    }
   });
 });
 
