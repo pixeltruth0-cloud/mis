@@ -70,13 +70,14 @@ app.get("/", (req, res) => {
 ====================== */
 
 app.post("/login", (req, res) => {
+
   if (!db) {
     return res.json({ success: false, message: "Database not connected" });
   }
 
-  const { User_Mail, Password } = req.body;
+  const { User_Mail, Password, Department } = req.body;
 
-  if (!User_Mail || !Password) {
+  if (!User_Mail || !Password || !Department) {
     return res.json({ success: false, message: "Missing fields" });
   }
 
@@ -96,27 +97,30 @@ app.post("/login", (req, res) => {
 
     const user = rows[0];
 
+    // 🔐 Check if selected department is allowed
     const deptSql = `
       SELECT department
       FROM user_departments
       WHERE user_mail = ?
+        AND department = ?
     `;
 
-    db.query(deptSql, [user.User_Mail], (err, deptRows) => {
+    db.query(deptSql, [user.User_Mail, Department], (err, deptRows) => {
 
-      let departments = [];
-
-      if (!err && deptRows.length > 0) {
-        departments = deptRows.map(d => d.department);
-      } else {
-        departments = [user.Department];
+      // ❌ Invalid department selection
+      if (!err && deptRows.length === 0 && user.Department !== Department) {
+        return res.json({
+          success: false,
+          message: "Unauthorized department access"
+        });
       }
 
+      // ✅ Session
       req.session.user = {
         User_Name: user.User_Name,
         User_Mail: user.User_Mail,
         Role: user.Role,
-        Departments: departments,
+        Department: Department,
         Employee_ID: user.Employee_ID
       };
 
@@ -127,16 +131,13 @@ app.post("/login", (req, res) => {
         redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
       }
       else if (user.Role === "HR") {
-        redirectUrl = `${BASE_URL}/HR/${departments[0]}/HR_dashboard.html`;
+        redirectUrl = `${BASE_URL}/HR/${Department}/HR_dashboard.html`;
       }
       else if (user.Role === "Team_Lead") {
-        redirectUrl = `${BASE_URL}/TL/${departments[0]}/TL_dashboard.html`;
-      }
-      else if (departments.length > 1) {
-        redirectUrl = `${BASE_URL}/select-department.html`;
+        redirectUrl = `${BASE_URL}/TL/${Department}/TL_dashboard.html`;
       }
       else {
-        redirectUrl = `${BASE_URL}/${departments[0]}/dashboard.html`;
+        redirectUrl = `${BASE_URL}/${Department}/dashboard.html`;
       }
 
       return res.json({
@@ -146,7 +147,7 @@ app.post("/login", (req, res) => {
           User_Name: user.User_Name,
           User_Mail: user.User_Mail,
           Role: user.Role,
-          Departments: departments
+          Department: Department
         }
       });
     });
