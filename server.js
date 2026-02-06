@@ -69,8 +69,6 @@ app.get("/", (req, res) => {
    GET LOGGED IN USER INFO
 ====================== */
 
-
-
 app.post("/login", (req, res) => {
   if (!db) {
     return res.json({ success: false, message: "Database not connected" });
@@ -82,7 +80,6 @@ app.post("/login", (req, res) => {
     return res.json({ success: false, message: "Missing fields" });
   }
 
-  // 🔥 IMPORTANT: Role ko query se HATA diya
   const sql = `
     SELECT *
     FROM mis_user_data
@@ -97,73 +94,65 @@ app.post("/login", (req, res) => {
       return res.json({ success: false, message: "Invalid credentials" });
     }
 
-  const user = rows[0];
-// 🔥 STEP 1: check multi-department access
-const deptSql = `
-  SELECT department
-  FROM user_departments
-  WHERE user_mail = ?
-`;
+    const user = rows[0];
 
-db.query(deptSql, [user.User_Mail], (err, deptRows) => {
+    const deptSql = `
+      SELECT department
+      FROM user_departments
+      WHERE user_mail = ?
+    `;
 
-  let departments = [];
+    db.query(deptSql, [user.User_Mail], (err, deptRows) => {
 
-  if (!err && deptRows.length > 0) {
-    // ✅ SPECIAL USER (MULTI DEPARTMENT)
-    departments = deptRows.map(d => d.department);
-  } else {
-    // 👤 NORMAL USER
-    departments = [user.Department];
-  }
+      let departments = [];
 
-  // 🔐 SESSION UPDATE
-  req.session.user = {
-    User_Name: user.User_Name,
-    User_Mail: user.User_Mail,
-    Role: user.Role,
-    Departments: departments,   // 🔥 IMPORTANT CHANGE
-    Employee_ID: user.Employee_ID,
-    Designation: user.Designation,
-    Phone_Number: user.Phone_Number,
-    Reporting_Person: user.Reporting_Person
-  };
-    });   // ✅ outer db.query close
-});       // ✅ app.post("/login") close
+      if (!err && deptRows.length > 0) {
+        departments = deptRows.map(d => d.department);
+      } else {
+        departments = [user.Department];
+      }
 
+      req.session.user = {
+        User_Name: user.User_Name,
+        User_Mail: user.User_Mail,
+        Role: user.Role,
+        Departments: departments,
+        Employee_ID: user.Employee_ID
+      };
 
-  const BASE_URL = "https://pixeltruth.com/mis";
-  let redirectUrl = "";
+      const BASE_URL = "https://pixeltruth.com/mis";
+      let redirectUrl = "";
 
-  // 🔁 NORMAL vs MULTI-DEPT
-  if (departments.length === 1) {
-    redirectUrl = `${BASE_URL}/${departments[0]}/dashboard.html`;
-  } else {
-    redirectUrl = `${BASE_URL}/select-department.html`;
-  }
+      if (user.Role === "Director" || user.Role === "HR Manager") {
+        redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
+      }
+      else if (user.Role === "HR") {
+        redirectUrl = `${BASE_URL}/HR/${departments[0]}/HR_dashboard.html`;
+      }
+      else if (user.Role === "Team_Lead") {
+        redirectUrl = `${BASE_URL}/TL/${departments[0]}/TL_dashboard.html`;
+      }
+      else if (departments.length > 1) {
+        redirectUrl = `${BASE_URL}/select-department.html`;
+      }
+      else {
+        redirectUrl = `${BASE_URL}/${departments[0]}/dashboard.html`;
+      }
 
-  // 🔐 ROLE OVERRIDES (same logic as before)
-  if (user.Role === "Director" || user.Role === "HR Manager") {
-    redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
-  } 
-  else if (user.Role === "HR") {
-    redirectUrl = `${BASE_URL}/HR/${departments[0]}/HR_dashboard.html`;
-  } 
-  else if (user.Role === "Team_Lead") {
-    redirectUrl = `${BASE_URL}/TL/${departments[0]}/TL_dashboard.html`;
-  }
-
-  return res.json({
-    success: true,
-    redirectUrl,
-    user: {
-      User_Name: user.User_Name,
-      User_Mail: user.User_Mail,
-      Role: user.Role,
-      Departments: departments
-    }
+      return res.json({
+        success: true,
+        redirectUrl,
+        user: {
+          User_Name: user.User_Name,
+          User_Mail: user.User_Mail,
+          Role: user.Role,
+          Departments: departments
+        }
+      });
+    });
   });
 });
+
 
 /* ======================
    ADD USER (HR) ✅ FIXED
