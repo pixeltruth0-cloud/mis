@@ -302,16 +302,16 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
     return res.json({ success: false, message: "No data received" });
   }
 
-  // ❌ remove unwanted fields
+  // ❌ Auto columns remove
   delete data.insert_id;
   delete data.created_at;
 
-  // ✅ TABLE KE EXACT COLUMN NAMES
+  // ✅ EXACT TABLE COLUMNS (insert_id & created_at excluded)
   const allowedColumns = [
-    "date",
     "user_name",
     "user_mail",
     "department",
+    "date",
 
     "Website_Audit_Brand",
     "Website_Audit_Type_Of_Task",
@@ -354,22 +354,15 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
     "ITC_Cigarette_Remark"
   ];
 
-  // ✅ FILTER ONLY VALID COLUMNS
+  // ✅ Filter only valid table columns
   const filteredData = {};
 
   allowedColumns.forEach(col => {
-    if (data[col] !== undefined) {
-      filteredData[col] = data[col];
-    }
+    filteredData[col] = data[col] !== undefined ? data[col] : null;
   });
 
   const columns = Object.keys(filteredData);
   const values = Object.values(filteredData);
-
-  if (columns.length === 0) {
-    return res.json({ success: false, message: "No valid fields found" });
-  }
-
   const placeholders = columns.map(() => "?").join(",");
 
   const sql = `
@@ -388,7 +381,6 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
   });
 
 });
-
 
 /* ======================
    BRAND INFRINGEMENT SUBMIT
