@@ -167,6 +167,9 @@ return res.json({
     Reporting_Person: user.Reporting_Person || ""
   }
 });
+ });  // deptSql close
+  });    // main query close
+});      // login route close
 
 /* ======================
    ADD USER (HR) ✅ FIXED
@@ -321,9 +324,7 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
   });
 });
 
-/* ======================
-   BRAND INFRINGEMENT SUBMIT
-====================== */
+
 /* ======================
    BRAND INFRINGEMENT SUBMIT
 ====================== */
@@ -713,7 +714,81 @@ app.post("/deleteTask", (req, res) => {
   });
 });
 
+/* ======================
+   DELETE DEPARTMENT DATA
+====================== */
+app.post("/deleteDepartmentData", (req, res) => {
 
+  if (!db) return res.json({ success: false });
+
+  const { id } = req.body;
+
+  if (!id) return res.json({ success: false });
+
+  const sql = `
+    DELETE FROM social_media_n_website_audit_data
+    WHERE id = ?
+  `;
+
+  db.query(sql, [id], (err) => {
+    if (err) {
+      console.error("❌ deleteDepartmentData error:", err.message);
+      return res.json({ success: false });
+    }
+
+    res.json({ success: true });
+  });
+});
+
+/* ======================
+   UPDATE DEPARTMENT DATA
+====================== */
+app.post("/updateDepartmentData", (req, res) => {
+
+  if (!db) return res.json({ success: false });
+
+  const { id, column, value } = req.body;
+
+  if (!id || !column) {
+    return res.json({ success: false });
+  }
+
+  const allowedColumns = [
+    "category",
+    "count",
+    "hours",
+    "minutes",
+    "remarks",
+    "real_estimated_hours",
+    "real_estimated_minutes",
+    "real_estimated_remarks",
+    "impact_brand",
+    "impact_count",
+    "impact_hours",
+    "impact_minutes",
+    "impact_remarks",
+    "itc_platform"
+  ];
+
+  if (!allowedColumns.includes(column)) {
+    return res.json({ success: false, message: "Invalid column" });
+  }
+
+  const sql = `
+    UPDATE social_media_n_website_audit_data
+    SET ${column} = ?
+    WHERE id = ?
+  `;
+
+  db.query(sql, [value, id], (err) => {
+    if (err) {
+      console.error("❌ updateDepartmentData error:", err.message);
+      return res.json({ success: false });
+    }
+
+    res.json({ success: true });
+  });
+});
 /* ======================
    GET ASSIGNED TASKS (DEPT WISE)
 ====================== */
