@@ -287,9 +287,7 @@ app.post("/archiveUser", (req, res) => {
   });
 });
 
-/* ======================
-   INSERT PROJECT DATA
-====================== */
+
 /* ======================
    INSERT PROJECT DATA (DAILY LIMIT PROTECTED)
 ====================== */
@@ -300,7 +298,14 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
   }
 
   const data = req.body;
+   const cleanedData = {};
+   
+   Object.keys(data).forEach(key => {
+     const cleanKey = key.replace(/\[\]$/, '');
+     cleanedData[cleanKey] = data[key];
+   });
 
+Object.assign(data, cleanedData);
   // Convert multiple select arrays to string
   Object.keys(data).forEach(key => {
     if (Array.isArray(data[key])) {
