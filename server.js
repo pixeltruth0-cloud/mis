@@ -297,6 +297,11 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
   }
 
   const data = req.body;
+Object.keys(data).forEach(key => {
+  if (Array.isArray(data[key])) {
+    data[key] = data[key].join(", ");
+  }
+});
 
   if (!data || Object.keys(data).length === 0) {
     return res.json({ success: false, message: "No data received" });
