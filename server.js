@@ -727,7 +727,7 @@ app.post("/deleteDepartmentData", (req, res) => {
 
   const sql = `
     DELETE FROM social_media_n_website_audit_data
-    WHERE id = ?
+    WHERE insert_id = ?
   `;
 
   db.query(sql, [id], (err) => {
@@ -777,7 +777,7 @@ app.post("/updateDepartmentData", (req, res) => {
   const sql = `
     UPDATE social_media_n_website_audit_data
     SET ${column} = ?
-    WHERE id = ?
+    WHERE insert_id = ?
   `;
 
   db.query(sql, [value, id], (err) => {
