@@ -124,36 +124,49 @@ app.post("/login", (req, res) => {
         Employee_ID: user.Employee_ID
       };
 
-      const BASE_URL = "https://pixeltruth.com/mis";
-      let redirectUrl = "";
+   const BASE_URL = "https://pixeltruth.com/mis";
+let redirectUrl = "";
 
-      if (user.Role === "Director" || user.Role === "HR Manager") {
-        redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
-      }
-      else if (user.Role === "HR") {
-        redirectUrl = `${BASE_URL}/HR/${Department}/HR_dashboard.html`;
-      }
-      else if (user.Role === "Team_Lead") {
-        redirectUrl = `${BASE_URL}/TL/${Department}/TL_dashboard.html`;
-      }
-      else {
-        redirectUrl = `${BASE_URL}/${Department}/dashboard.html`;
-      }
+if (user.Role === "Director" || user.Role === "HR Manager") {
+  redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
+}
+else if (user.Role === "HR") {
+  redirectUrl = `${BASE_URL}/HR/${Department}/HR_dashboard.html`;
+}
+else if (user.Role === "Team_Lead") {
+  redirectUrl = `${BASE_URL}/TL/${Department}/TL_dashboard.html`;
+}
+else {
+  redirectUrl = `${BASE_URL}/${Department}/dashboard.html`;
+}
 
-      return res.json({
-        success: true,
-        redirectUrl,
-        user: {
-          User_Name: user.User_Name,
-          User_Mail: user.User_Mail,
-          Role: user.Role,
-          Department: Department
-        }
-      });
-    });
-  });
+/* ✅ Session */
+req.session.user = {
+  User_Name: user.User_Name,
+  User_Mail: user.User_Mail,
+  Role: user.Role,
+  Department: Department,
+  Employee_ID: user.Employee_ID,
+  Designation: user.Designation,
+  Phone_Number: user.Phone_Number,
+  Reporting_Person: user.Reporting_Person
+};
+
+/* ✅ Final Response */
+return res.json({
+  success: true,
+  redirectUrl,
+  user: {
+    User_Name: user.User_Name,
+    User_Mail: user.User_Mail,
+    Role: user.Role,
+    Department: Department,
+    Employee_ID: user.Employee_ID || "",
+    Designation: user.Designation || "",
+    Phone_Number: user.Phone_Number || "",
+    Reporting_Person: user.Reporting_Person || ""
+  }
 });
-
 
 /* ======================
    ADD USER (HR) ✅ FIXED
