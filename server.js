@@ -291,6 +291,7 @@ app.post("/archiveUser", (req, res) => {
    INSERT PROJECT DATA
 ====================== */
 app.post("/submitProjectData", upload.none(), (req, res) => {
+
   if (!db) {
     return res.json({ success: false, message: "Database not connected" });
   }
@@ -301,11 +302,74 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
     return res.json({ success: false, message: "No data received" });
   }
 
+  // ❌ remove unwanted fields
   delete data.insert_id;
   delete data.created_at;
 
-  const columns = Object.keys(data);
-  const values = Object.values(data);
+  // ✅ TABLE KE EXACT COLUMN NAMES
+  const allowedColumns = [
+    "date",
+    "user_name",
+    "user_mail",
+    "department",
+
+    "Website_Audit_Brand",
+    "Website_Audit_Type_Of_Task",
+    "Website_Audit_hours",
+    "Website_Audit_minutes",
+    "Website_Audit_Remark",
+    "Website_Audit_Status",
+
+    "Social_Media_Audit_Brand",
+    "Social_Media_Audit_Type_Of_Task",
+    "Social_Media_Audit_hours",
+    "Social_Media_Audit_minutes",
+    "Social_Media_Audit_Remark",
+    "Social_Media_Audit_Status",
+
+    "Stationary_Brand",
+    "Stationary_Project",
+    "Stationary_Count",
+    "Stationary_hours",
+    "Stationary_minutes",
+    "Stationary_Remark",
+
+    "Real_estimated_Brand",
+    "Real_estimated_Categories",
+    "Real_estimated_Count",
+    "Real_estimated_hours",
+    "Real_estimated_minutes",
+    "Real_estimated_Remark",
+
+    "Incent_Brand",
+    "Incent_Count",
+    "Incent_Eastat_hours",
+    "Incent_Eastat_minutes",
+    "Incent_Remark",
+
+    "ITC_Cigarette_Platform",
+    "ITC_Cigarette_Count",
+    "ITC_Cigarette_hours",
+    "ITC_Cigarette_minutes",
+    "ITC_Cigarette_Remark"
+  ];
+
+  // ✅ FILTER ONLY VALID COLUMNS
+  const filteredData = {};
+
+  allowedColumns.forEach(col => {
+    if (data[col] !== undefined) {
+      filteredData[col] = data[col];
+    }
+  });
+
+  const columns = Object.keys(filteredData);
+  const values = Object.values(filteredData);
+
+  if (columns.length === 0) {
+    return res.json({ success: false, message: "No valid fields found" });
+  }
+
   const placeholders = columns.map(() => "?").join(",");
 
   const sql = `
@@ -322,6 +386,7 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
 
     res.json({ success: true, message: "Data inserted successfully" });
   });
+
 });
 
 
