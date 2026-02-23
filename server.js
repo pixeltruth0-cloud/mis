@@ -290,6 +290,9 @@ app.post("/archiveUser", (req, res) => {
 /* ======================
    INSERT PROJECT DATA
 ====================== */
+/* ======================
+   INSERT PROJECT DATA (DAILY LIMIT PROTECTED)
+====================== */
 app.post("/submitProjectData", upload.none(), (req, res) => {
 
   if (!db) {
@@ -297,92 +300,123 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
   }
 
   const data = req.body;
-Object.keys(data).forEach(key => {
-  if (Array.isArray(data[key])) {
-    data[key] = data[key].join(", ");
-  }
-});
+
+  // Convert multiple select arrays to string
+  Object.keys(data).forEach(key => {
+    if (Array.isArray(data[key])) {
+      data[key] = data[key].join(", ");
+    }
+  });
 
   if (!data || Object.keys(data).length === 0) {
     return res.json({ success: false, message: "No data received" });
   }
 
-  // ❌ Auto columns remove
-  delete data.insert_id;
-  delete data.created_at;
+  const { user_mail, department, date } = data;
 
-  // ✅ EXACT TABLE COLUMNS (insert_id & created_at excluded)
-  const allowedColumns = [
-    "user_name",
-    "user_mail",
-    "department",
-    "date",
+  if (!user_mail || !department || !date) {
+    return res.json({ success: false, message: "Missing required fields" });
+  }
 
-    "Website_Audit_Brand",
-    "Website_Audit_Type_Of_Task",
-    "Website_Audit_hours",
-    "Website_Audit_minutes",
-    "Website_Audit_Remark",
-    "Website_Audit_Status",
+  const MAX_MINUTES = 8 * 60 + 20;
 
-    "Social_Media_Audit_Brand",
-    "Social_Media_Audit_Type_Of_Task",
-    "Social_Media_Audit_hours",
-    "Social_Media_Audit_minutes",
-    "Social_Media_Audit_Remark",
-    "Social_Media_Audit_Status",
-
-    "Stationary_Brand",
-    "Stationary_Project",
-    "Stationary_Count",
-    "Stationary_hours",
-    "Stationary_minutes",
-    "Stationary_Remark",
-
-    "Real_estimated_Brand",
-    "Real_estimated_Categories",
-    "Real_estimated_Count",
-    "Real_estimated_hours",
-    "Real_estimated_minutes",
-    "Real_estimated_Remark",
-
-    "Incent_Brand",
-    "Incent_Count",
-    "Incent_Eastat_hours",
-    "Incent_Eastat_minutes",
-    "Incent_Remark",
-
-    "ITC_Cigarette_Platform",
-    "ITC_Cigarette_Count",
-    "ITC_Cigarette_hours",
-    "ITC_Cigarette_minutes",
-    "ITC_Cigarette_Remark"
-  ];
-
-  // ✅ Filter only valid table columns
-  const filteredData = {};
-
-  allowedColumns.forEach(col => {
-    filteredData[col] = data[col] !== undefined ? data[col] : null;
-  });
-
-  const columns = Object.keys(filteredData);
-  const values = Object.values(filteredData);
-  const placeholders = columns.map(() => "?").join(",");
-
-  const sql = `
-    INSERT INTO social_media_n_website_audit_data
-    (${columns.join(",")})
-    VALUES (${placeholders})
+  // 🔹 Step 1: Get existing minutes for that day
+  const fetchSql = `
+    SELECT *
+    FROM social_media_n_website_audit_data
+    WHERE user_mail = ?
+      AND department = ?
+      AND date = ?
   `;
 
-  db.query(sql, values, (err) => {
+  db.query(fetchSql, [user_mail, department, date], (err, rows) => {
+
     if (err) {
-      console.error("❌ Insert Error:", err.message);
-      return res.json({ success: false, message: "Insert failed" });
+      console.error("❌ Fetch Error:", err.message);
+      return res.json({ success: false });
     }
 
-    res.json({ success: true, message: "Data inserted successfully" });
+    let existingMinutes = 0;
+
+    rows.forEach(row => {
+      Object.keys(row).forEach(key => {
+        if (key.endsWith("_hours")) {
+          existingMinutes += Number(row[key] || 0) * 60;
+        }
+        if (key.endsWith("_minutes")) {
+          existingMinutes += Number(row[key] || 0);
+        }
+      });
+    });
+
+    // 🔹 Step 2: Calculate new entry minutes
+    let newMinutes = 0;
+
+    Object.keys(data).forEach(key => {
+      if (key.endsWith("_hours")) {
+        newMinutes += Number(data[key] || 0) * 60;
+      }
+      if (key.endsWith("_minutes")) {
+        newMinutes += Number(data[key] || 0);
+      }
+    });
+
+    const totalMinutes = existingMinutes + newMinutes;
+
+    if (totalMinutes > MAX_MINUTES) {
+
+      return res.json({
+        success: false,
+        message: `Daily limit exceeded. Already used ${Math.floor(existingMinutes/60)}h ${existingMinutes%60}m`
+      });
+    }
+
+    // 🔹 Step 3: Insert safely
+    delete data.insert_id;
+    delete data.created_at;
+
+    const allowedColumns = [
+      "user_name","user_mail","department","date",
+
+      "Website_Audit_Brand","Website_Audit_Type_Of_Task","Website_Audit_hours","Website_Audit_minutes","Website_Audit_Remark","Website_Audit_Status",
+
+      "Social_Media_Audit_Brand","Social_Media_Audit_Type_Of_Task","Social_Media_Audit_hours","Social_Media_Audit_minutes","Social_Media_Audit_Remark","Social_Media_Audit_Status",
+
+      "Stationary_Brand","Stationary_Project","Stationary_Count","Stationary_hours","Stationary_minutes","Stationary_Remark",
+
+      "Real_estimated_Brand","Real_estimated_Categories","Real_estimated_Count","Real_estimated_hours","Real_estimated_minutes","Real_estimated_Remark",
+
+      "Incent_Brand","Incent_Count","Incent_Eastat_hours","Incent_Eastat_minutes","Incent_Remark",
+
+      "ITC_Cigarette_Platform","ITC_Cigarette_Count","ITC_Cigarette_hours","ITC_Cigarette_minutes","ITC_Cigarette_Remark"
+    ];
+
+    const filteredData = {};
+
+    allowedColumns.forEach(col => {
+      filteredData[col] = data[col] !== undefined ? data[col] : null;
+    });
+
+    const columns = Object.keys(filteredData);
+    const values = Object.values(filteredData);
+    const placeholders = columns.map(() => "?").join(",");
+
+    const insertSql = `
+      INSERT INTO social_media_n_website_audit_data
+      (${columns.join(",")})
+      VALUES (${placeholders})
+    `;
+
+    db.query(insertSql, values, (err) => {
+
+      if (err) {
+        console.error("❌ Insert Error:", err.message);
+        return res.json({ success: false });
+      }
+
+      res.json({ success: true });
+    });
+
   });
 
 });
