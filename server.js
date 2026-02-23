@@ -297,25 +297,19 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
     return res.json({ success: false, message: "Database not connected" });
   }
 
-  const data = req.body;
-   const cleanedData = {};
-   
-   Object.keys(data).forEach(key => {
-     const cleanKey = key.replace(/\[\]$/, '');
-     cleanedData[cleanKey] = data[key];
-   });
+  // 🔥 STEP 1 — Clean [] keys properly
+  const rawData = req.body;
+  const data = {};
 
-Object.assign(data, cleanedData);
-  // Convert multiple select arrays to string
-  Object.keys(data).forEach(key => {
-    if (Array.isArray(data[key])) {
-      data[key] = data[key].join(", ");
+  Object.keys(rawData).forEach(key => {
+    const cleanKey = key.replace(/\[\]$/, '');
+
+    if (Array.isArray(rawData[key])) {
+      data[cleanKey] = rawData[key].join(", ");
+    } else {
+      data[cleanKey] = rawData[key];
     }
   });
-
-  if (!data || Object.keys(data).length === 0) {
-    return res.json({ success: false, message: "No data received" });
-  }
 
   const { user_mail, department, date } = data;
 
@@ -325,7 +319,6 @@ Object.assign(data, cleanedData);
 
   const MAX_MINUTES = 8 * 60 + 20;
 
-  // 🔹 Step 1: Get existing minutes for that day
   const fetchSql = `
     SELECT *
     FROM social_media_n_website_audit_data
@@ -354,7 +347,6 @@ Object.assign(data, cleanedData);
       });
     });
 
-    // 🔹 Step 2: Calculate new entry minutes
     let newMinutes = 0;
 
     Object.keys(data).forEach(key => {
@@ -366,20 +358,14 @@ Object.assign(data, cleanedData);
       }
     });
 
-    const totalMinutes = existingMinutes + newMinutes;
-
-    if (totalMinutes > MAX_MINUTES) {
-
+    if (existingMinutes + newMinutes > MAX_MINUTES) {
       return res.json({
         success: false,
         message: `Daily limit exceeded. Already used ${Math.floor(existingMinutes/60)}h ${existingMinutes%60}m`
       });
     }
 
-    // 🔹 Step 3: Insert safely
-    delete data.insert_id;
-    delete data.created_at;
-
+    // 🔥 FIXED INSERT (STRICT ORDER MATCH)
     const allowedColumns = [
       "user_name","user_mail","department","date",
 
@@ -396,27 +382,20 @@ Object.assign(data, cleanedData);
       "ITC_Cigarette_Platform","ITC_Cigarette_Count","ITC_Cigarette_hours","ITC_Cigarette_minutes","ITC_Cigarette_Remark"
     ];
 
-    const filteredData = {};
+    const values = allowedColumns.map(col => data[col] ?? null);
 
-    allowedColumns.forEach(col => {
-      filteredData[col] = data[col] !== undefined ? data[col] : null;
-    });
-
-    const columns = Object.keys(filteredData);
-    const values = Object.values(filteredData);
-    const placeholders = columns.map(() => "?").join(",");
+    const placeholders = allowedColumns.map(() => "?").join(",");
 
     const insertSql = `
       INSERT INTO social_media_n_website_audit_data
-      (${columns.join(",")})
+      (${allowedColumns.join(",")})
       VALUES (${placeholders})
     `;
 
     db.query(insertSql, values, (err) => {
-
       if (err) {
-        console.error("❌ Insert Error:", err.message);
-        return res.json({ success: false });
+        console.error("❌ FINAL INSERT ERROR:", err.message);
+        return res.json({ success: false, message: err.message });
       }
 
       res.json({ success: true });
