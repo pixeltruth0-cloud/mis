@@ -304,12 +304,23 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
   Object.keys(rawData).forEach(key => {
     const cleanKey = key.replace(/\[\]$/, '');
 
-    if (Array.isArray(rawData[key])) {
-      data[cleanKey] = rawData[key].join(", ");
-    } else {
-      data[cleanKey] = rawData[key];
-    }
-  });
+   if (Array.isArray(rawData[key])) {
+   
+     // Numeric fields ke liye sum karo
+     if (
+       cleanKey.endsWith("_hours") ||
+       cleanKey.endsWith("_minutes") ||
+       cleanKey.endsWith("_Count")
+     ) {
+       data[cleanKey] = rawData[key]
+         .map(v => Number(v) || 0)
+         .reduce((a, b) => a + b, 0);
+     } else {
+       // text fields ke liye join karo
+       data[cleanKey] = rawData[key].join(", ");
+     }
+   
+   }
 
   const { user_mail, department, date } = data;
 
