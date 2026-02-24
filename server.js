@@ -382,7 +382,12 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
       "ITC_Cigarette_Platform","ITC_Cigarette_Count","ITC_Cigarette_hours","ITC_Cigarette_minutes","ITC_Cigarette_Remark"
     ];
 
-    const values = allowedColumns.map(col => data[col] ?? null);
+    const values = allowedColumns.map(col => {
+  if (col.endsWith("_hours") || col.endsWith("_minutes") || col.endsWith("_Count")) {
+    return data[col] ? Number(data[col]) : 0;
+  }
+  return data[col] ? data[col] : "";
+});
 
     const placeholders = allowedColumns.map(() => "?").join(",");
 
