@@ -320,7 +320,7 @@ app.post("/submitProjectData", upload.none(), (req, res) => {
        data[cleanKey] = rawData[key].join(", ");
      }
    
-   }
+   });
 
   const { user_mail, department, date } = data;
 
