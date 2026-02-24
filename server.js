@@ -222,14 +222,21 @@ app.post("/addUser", upload.none(), (req, res) => {
     req.body.Department || "Social_Media_N_Website_Audit"
   ];
 
-  db.query(sql, values, (err) => {
-    if (err) {
-      console.error("❌ Add User Error:", err.message);
-      return res.json({ success: false });
-    }
+  db.query(insertSql, values, (err) => {
+  if (err) {
+    console.error("❌ FINAL INSERT ERROR:", err.message);
+    return res.json({ success: false, message: err.message });
+  }
 
-    console.log("✅ User added:", New_User_Mail);
-    res.json({ success: true });
+  // ✅ Calculate total used minutes after insert
+  const totalUsedMinutes = existingMinutes + newMinutes;
+  const remainingMinutes = MAX_MINUTES - totalUsedMinutes;
+
+  return res.json({
+    success: true,
+    message: "Data submitted successfully",
+    remainingHours: Math.floor(remainingMinutes / 60),
+    remainingMinutes: remainingMinutes % 60
   });
 });
 
