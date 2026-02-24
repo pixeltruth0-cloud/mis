@@ -425,7 +425,9 @@ Object.keys(rawData).forEach(key => {
     remainingMinutes: remainingMinutes % 60
   });
 });
+});  // ✅ CLOSE fetchSql query
 
+}); 
 /* ======================
    BRAND INFRINGEMENT SUBMIT
 ====================== */
