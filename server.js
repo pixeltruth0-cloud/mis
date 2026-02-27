@@ -1182,7 +1182,84 @@ app.get("/getSuperAdminDashboardData", (req, res) => {
   });
 });
 
+app.get("/getSummary", (req, res) => {
 
+  if (!db) return res.json({ success:false });
+
+  const { department, type } = req.query;
+
+  // 🔐 SUPER ADMIN SECURITY (REAL PROTECTION)
+  if (!req.session.user ||
+      (req.session.user.Role !== "Director" &&
+       req.session.user.Role !== "HR Manager")) {
+
+    return res.status(403).json({
+      success:false,
+      message:"Unauthorized"
+    });
+  }
+
+  if (!department || !type) {
+    return res.json({ success:false });
+  }
+
+  let dateFilter = "";
+
+  if (type === "day") {
+    dateFilter = "DATE(date) = CURDATE()";
+  }
+  else if (type === "week") {
+    dateFilter = "YEARWEEK(date, 1) = YEARWEEK(CURDATE(), 1)";
+  }
+  else if (type === "month") {
+    dateFilter = "MONTH(date) = MONTH(CURDATE()) AND YEAR(date) = YEAR(CURDATE())";
+  }
+
+  const sql = `
+    SELECT *
+    FROM social_media_n_website_audit_data
+    WHERE department = ?
+      AND ${dateFilter}
+  `;
+
+  db.query(sql, [department], (err, rows) => {
+
+    if (err) {
+      console.error("❌ Summary Error:", err.message);
+      return res.json({ success:false });
+    }
+
+    // 🔥 CALCULATE TOTAL MINUTES
+    let totalMinutes = 0;
+
+    rows.forEach(row => {
+      Object.keys(row).forEach(key => {
+
+        if (key.endsWith("_hours")) {
+          totalMinutes += Number(row[key] || 0) * 60;
+        }
+
+        if (key.endsWith("_minutes")) {
+          totalMinutes += Number(row[key] || 0);
+        }
+
+      });
+    });
+
+    const totalHours = Math.floor(totalMinutes / 60);
+    const remainingMinutes = totalMinutes % 60;
+
+    res.json({
+      success:true,
+      totalEntries: rows.length,
+      totalHours,
+      totalMinutes: remainingMinutes,
+      rawData: rows
+    });
+
+  });
+
+});
 /* ======================
    Server Start
 ====================== */
