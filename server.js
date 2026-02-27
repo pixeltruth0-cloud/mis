@@ -1186,18 +1186,15 @@ app.get("/getSummary", (req, res) => {
 
   if (!db) return res.json({ success:false });
 
-  if (!req.session.user) {
-    return res.status(401).json({ success:false, message:"Not logged in" });
-  }
+  const { department, type, role } = req.query;
 
-  if (
-    req.session.user.Role !== "Director" &&
-    req.session.user.Role !== "HR Manager"
-  ) {
-    return res.status(403).json({ success:false, message:"Unauthorized" });
+  // 🔐 ROLE VALIDATION (NO SESSION)
+  if (role !== "Director" && role !== "HR Manager") {
+    return res.status(403).json({
+      success:false,
+      message:"Unauthorized"
+    });
   }
-
-  const { department, type } = req.query;
 
   if (!department || !type) {
     return res.json({ success:false, message:"Missing parameters" });
