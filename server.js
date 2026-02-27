@@ -133,7 +133,7 @@ let redirectUrl = "";
 if (user.Role === "Director" || user.Role === "HR Manager") {
   redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
 }
-else if (user.Role === "HR") {
+else if (user.Role === "HR" || user.Role === "ADMIN") {
   redirectUrl = `${BASE_URL}/HR/${Department}/HR_dashboard.html`;
 }
 else if (user.Role === "Team_Lead") {
@@ -682,56 +682,83 @@ app.get("/getBrandInfringementData", (req, res) => {
 /* ======================
    MEDIA MONITORING DASHBOARD
 ====================== */
+/* ======================
+   MEDIA MONITORING DASHBOARD (UPDATED)
+====================== */
 app.get("/getMediaMonitoringData", (req, res) => {
 
-  if (!db) return res.json([]);
+  if (!db) {
+    return res.json({ success: false, data: [] });
+  }
 
   const { user_mail, role, department } = req.query;
 
   if (!user_mail || !role || !department) {
-    return res.json([]);
+    return res.json({ success: false, data: [] });
   }
 
   const roleUpper = role.trim().toUpperCase();
+  const dept = department.trim();
+  const userMail = user_mail.trim();
 
   let sql = "";
   let params = [];
 
+  /* ======================
+     ADMIN / HR / TL / DIRECTOR
+     → Full department data
+  ====================== */
   if (["ADMIN","HR","TEAM_LEAD","DIRECTOR","HR_MANAGER"].includes(roleUpper)) {
 
     sql = `
       SELECT *
       FROM media_monitoring_data
       WHERE TRIM(department) = ?
-      ORDER BY date DESC
+      ORDER BY date DESC, insert_id DESC
+      LIMIT 200
     `;
-    params = [department];
 
-  } else {
+    params = [dept];
+
+  }
+
+  /* ======================
+     EMPLOYEE / INTERN
+     → Only own department data
+  ====================== */
+  else {
 
     sql = `
       SELECT *
       FROM media_monitoring_data
       WHERE user_mail = ?
-      ORDER BY date DESC
+        AND TRIM(department) = ?
+      ORDER BY date DESC, insert_id DESC
+      LIMIT 200
     `;
-    params = [user_mail];
+
+    params = [userMail, dept];
+
   }
 
   db.query(sql, params, (err, rows) => {
 
     if (err) {
       console.error("❌ Media Monitoring Fetch Error:", err.message);
-      return res.json([]);
+      return res.json({ success: false, data: [] });
     }
 
+    // Safety: fallback date
     rows.forEach(r => {
       if (!r.date && r.created_at) {
         r.date = r.created_at;
       }
     });
 
-    res.json(rows);
+    res.json({
+      success: true,
+      data: rows
+    });
 
   });
 
