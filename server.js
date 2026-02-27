@@ -10,7 +10,7 @@ const upload = multer();
 
 /* ======================
    Middleware
-====================== */
+====================== *//
 app.use(cors({
   origin: "https://pixeltruth.com",
   credentials: true
