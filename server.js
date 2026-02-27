@@ -1256,21 +1256,6 @@ app.get("/getSummary", (req, res) => {
   });
 
 });
-
-    const totalHours = Math.floor(totalMinutes / 60);
-    const remainingMinutes = totalMinutes % 60;
-
-    res.json({
-      success:true,
-      totalEntries: rows.length,
-      totalHours,
-      totalMinutes: remainingMinutes,
-      rawData: rows
-    });
-
-  });
-
-});
 /* ======================
    Server Start
 ====================== */
