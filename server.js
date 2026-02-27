@@ -1343,16 +1343,30 @@ app.get("/getSummary", (req, res) => {
     return res.json({ success:false, message:"Department required" });
   }
 
-  let sql = `
-    SELECT *
-    FROM social_media_n_website_audit_data
-    WHERE department = ?
-  `;
+  /* ==========================
+     🔥 DYNAMIC TABLE MAPPING
+  ========================== */
 
+  let tableName = "";
+
+  if (department === "Social_Media_N_Website_Audit") {
+    tableName = "social_media_n_website_audit_data";
+  }
+  else if (department === "Brand_Infringement") {
+    tableName = "brand_infringement";
+  }
+  else if (department === "Media_Monitoring") {
+    tableName = "media_monitoring_data";
+  }
+  else {
+    return res.json({ success:false, message:"Invalid department" });
+  }
+
+  let sql = `SELECT * FROM ${tableName} WHERE department = ?`;
   let params = [department];
 
   /* ==============================
-     DATE RANGE PRIORITY
+     DATE RANGE / TYPE FILTER
   ============================== */
 
   if (from && to) {
@@ -1389,8 +1403,10 @@ app.get("/getSummary", (req, res) => {
     let totalMinutes = 0;
 
     rows.forEach(row => {
+
       Object.keys(row).forEach(key => {
 
+        // ✅ Social Media style (_hours/_minutes)
         if (key.endsWith("_hours")) {
           totalMinutes += Number(row[key] || 0) * 60;
         }
@@ -1399,7 +1415,17 @@ app.get("/getSummary", (req, res) => {
           totalMinutes += Number(row[key] || 0);
         }
 
+        // ✅ Media Monitoring style (hours/minutes)
+        if (key === "hours") {
+          totalMinutes += Number(row[key] || 0) * 60;
+        }
+
+        if (key === "minutes") {
+          totalMinutes += Number(row[key] || 0);
+        }
+
       });
+
     });
 
     res.json({
