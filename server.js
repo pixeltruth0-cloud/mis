@@ -133,7 +133,7 @@ let redirectUrl = "";
 if (user.Role === "Director" || user.Role === "HR Manager") {
   redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
 }
-else if (user.Role === "HR" || user.Role === "ADMIN") {
+else if (user.Role === "HR" || user.Role === "Admin") {
   redirectUrl = `${BASE_URL}/HR/${Department}/HR_dashboard.html`;
 }
 else if (user.Role === "Team_Lead") {
