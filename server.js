@@ -499,23 +499,56 @@ app.post("/submitMediaMonitoring", upload.none(), (req, res) => {
 
   const data = req.body;
 
-  if (!data || Object.keys(data).length === 0) {
+  // 🔒 Required fields validation
+  if (
+    !data.user_name ||
+    !data.user_mail ||
+    !data.department ||
+    !data.project ||
+    !data.sub_project ||
+    !data.brand ||
+    !data.platform ||
+    !data.type_of_work ||
+    !data.rotation ||
+    !data.date
+  ) {
     return res.json({
       success: false,
-      message: "No data received"
+      message: "Missing required fields"
     });
   }
 
-  delete data.insert_id;
-  delete data.created_at;
+  const allowedColumns = [
+    "user_name",
+    "user_mail",
+    "department",
+    "project",
+    "sub_project",
+    "brand",
+    "platform",
+    "type_of_work",
+    "rotation",
+    "work_count",
+    "date",
+    "remark",
+    "hours",
+    "minutes"
+  ];
 
-  const columns = Object.keys(data);
-  const values = Object.values(data);
-  const placeholders = columns.map(() => "?").join(",");
+  const values = allowedColumns.map(col => {
+
+    if (col === "work_count" || col === "hours" || col === "minutes") {
+      return Number(data[col]) || 0;
+    }
+
+    return data[col] || "";
+  });
+
+  const placeholders = allowedColumns.map(() => "?").join(",");
 
   const sql = `
     INSERT INTO media_monitoring_data
-    (${columns.join(",")})
+    (${allowedColumns.join(",")})
     VALUES (${placeholders})
   `;
 
