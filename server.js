@@ -1186,40 +1186,43 @@ app.get("/getSummary", (req, res) => {
 
   if (!db) return res.json({ success:false });
 
+  if (!req.session.user) {
+    return res.status(401).json({ success:false, message:"Not logged in" });
+  }
+
+  if (
+    req.session.user.Role !== "Director" &&
+    req.session.user.Role !== "HR Manager"
+  ) {
+    return res.status(403).json({ success:false, message:"Unauthorized" });
+  }
+
   const { department, type } = req.query;
 
-  // 🔐 SUPER ADMIN SECURITY (REAL PROTECTION)
-  if (!req.session.user ||
-      (req.session.user.Role !== "Director" &&
-       req.session.user.Role !== "HR Manager")) {
-
-    return res.status(403).json({
-      success:false,
-      message:"Unauthorized"
-    });
-  }
-
   if (!department || !type) {
-    return res.json({ success:false });
+    return res.json({ success:false, message:"Missing parameters" });
   }
 
-  let dateFilter = "";
+  let dateCondition = "";
 
   if (type === "day") {
-    dateFilter = "DATE(date) = CURDATE()";
+    dateCondition = "DATE(date) = CURDATE()";
   }
   else if (type === "week") {
-    dateFilter = "YEARWEEK(date, 1) = YEARWEEK(CURDATE(), 1)";
+    dateCondition = "YEARWEEK(date, 1) = YEARWEEK(CURDATE(), 1)";
   }
   else if (type === "month") {
-    dateFilter = "MONTH(date) = MONTH(CURDATE()) AND YEAR(date) = YEAR(CURDATE())";
+    dateCondition = "MONTH(date) = MONTH(CURDATE()) AND YEAR(date) = YEAR(CURDATE())";
+  }
+  else {
+    return res.json({ success:false, message:"Invalid type" });
   }
 
   const sql = `
     SELECT *
     FROM social_media_n_website_audit_data
     WHERE department = ?
-      AND ${dateFilter}
+    AND ${dateCondition}
   `;
 
   db.query(sql, [department], (err, rows) => {
@@ -1229,22 +1232,30 @@ app.get("/getSummary", (req, res) => {
       return res.json({ success:false });
     }
 
-    // 🔥 CALCULATE TOTAL MINUTES
     let totalMinutes = 0;
 
     rows.forEach(row => {
       Object.keys(row).forEach(key => {
-
         if (key.endsWith("_hours")) {
           totalMinutes += Number(row[key] || 0) * 60;
         }
-
         if (key.endsWith("_minutes")) {
           totalMinutes += Number(row[key] || 0);
         }
-
       });
     });
+
+    res.json({
+      success:true,
+      totalEntries: rows.length,
+      totalHours: Math.floor(totalMinutes / 60),
+      totalMinutes: totalMinutes % 60,
+      rawData: rows
+    });
+
+  });
+
+});
 
     const totalHours = Math.floor(totalMinutes / 60);
     const remainingMinutes = totalMinutes % 60;
