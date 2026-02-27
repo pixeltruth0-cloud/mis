@@ -1186,9 +1186,9 @@ app.get("/getSummary", (req, res) => {
 
   if (!db) return res.json({ success:false });
 
-  const { department, type, role } = req.query;
+  const { department, role, type, from, to } = req.query;
 
-  // 🔐 ROLE VALIDATION (NO SESSION)
+  // 🔐 ROLE VALIDATION
   if (role !== "Director" && role !== "HR Manager") {
     return res.status(403).json({
       success:false,
@@ -1196,33 +1196,47 @@ app.get("/getSummary", (req, res) => {
     });
   }
 
-  if (!department || !type) {
-    return res.json({ success:false, message:"Missing parameters" });
+  if (!department) {
+    return res.json({ success:false, message:"Department required" });
   }
 
-  let dateCondition = "";
-
-  if (type === "day") {
-    dateCondition = "DATE(date) = CURDATE()";
-  }
-  else if (type === "week") {
-    dateCondition = "YEARWEEK(date, 1) = YEARWEEK(CURDATE(), 1)";
-  }
-  else if (type === "month") {
-    dateCondition = "MONTH(date) = MONTH(CURDATE()) AND YEAR(date) = YEAR(CURDATE())";
-  }
-  else {
-    return res.json({ success:false, message:"Invalid type" });
-  }
-
-  const sql = `
+  let sql = `
     SELECT *
     FROM social_media_n_website_audit_data
     WHERE department = ?
-    AND ${dateCondition}
   `;
 
-  db.query(sql, [department], (err, rows) => {
+  let params = [department];
+
+  /* ==============================
+     DATE RANGE PRIORITY
+  ============================== */
+
+  if (from && to) {
+
+    sql += " AND DATE(date) BETWEEN ? AND ?";
+    params.push(from, to);
+
+  } else if (type) {
+
+    if (type === "day") {
+      sql += " AND DATE(date) = CURDATE()";
+    }
+    else if (type === "week") {
+      sql += " AND YEARWEEK(date, 1) = YEARWEEK(CURDATE(), 1)";
+    }
+    else if (type === "month") {
+      sql += " AND MONTH(date) = MONTH(CURDATE()) AND YEAR(date) = YEAR(CURDATE())";
+    }
+    else {
+      return res.json({ success:false, message:"Invalid type" });
+    }
+
+  }
+
+  sql += " ORDER BY date DESC";
+
+  db.query(sql, params, (err, rows) => {
 
     if (err) {
       console.error("❌ Summary Error:", err.message);
@@ -1233,12 +1247,15 @@ app.get("/getSummary", (req, res) => {
 
     rows.forEach(row => {
       Object.keys(row).forEach(key => {
+
         if (key.endsWith("_hours")) {
           totalMinutes += Number(row[key] || 0) * 60;
         }
+
         if (key.endsWith("_minutes")) {
           totalMinutes += Number(row[key] || 0);
         }
+
       });
     });
 
