@@ -107,13 +107,17 @@ app.post("/login", (req, res) => {
 
     db.query(deptSql, [user.User_Mail, Department], (err, deptRows) => {
 
-      // ❌ Invalid department selection
-      if (!err && deptRows.length === 0 && user.Department !== Department) {
-        return res.json({
-          success: false,
-          message: "Unauthorized department access"
-        });
-      }
+  // ✅ Skip department validation for Super Admin
+  if (user.Role !== "Director" && user.Role !== "HR Manager") {
+
+    if (!err && deptRows.length === 0 && user.Department !== Department) {
+      return res.json({
+        success: false,
+        message: "Unauthorized department access"
+      });
+    }
+
+  }
 
       // ✅ Session
       req.session.user = {
