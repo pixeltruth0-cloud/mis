@@ -19,7 +19,6 @@ app.use(cors({
 app.set("trust proxy", 1);
 
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 app.use(session({
   name: "pixeltruth.sid",
@@ -738,7 +737,83 @@ app.get("/getMediaMonitoringData", (req, res) => {
 
 });
 
+/* ======================
+   DELETE MEDIA MONITORING DATA
+====================== */
+app.post("/deleteMediaMonitoringData", (req, res) => {
 
+  if (!db) return res.json({ success: false });
+
+  const { id } = req.body;
+
+  if (!id) return res.json({ success: false });
+
+  const sql = `
+    DELETE FROM media_monitoring_data
+    WHERE insert_id = ?
+  `;
+
+  db.query(sql, [id], (err) => {
+    if (err) {
+      console.error("❌ deleteMediaMonitoringData error:", err.message);
+      return res.json({ success: false });
+    }
+
+    res.json({ success: true });
+  });
+
+});
+
+/* ======================
+   UPDATE MEDIA MONITORING DATA
+====================== */
+app.post("/updateMediaMonitoringData", (req, res) => {
+
+  if (!db) return res.json({ success: false });
+
+  const { id, column, value } = req.body;
+
+  if (!id || !column) {
+    return res.json({ success: false });
+  }
+
+  // 🔒 Allowed editable columns
+  const allowedColumns = [
+    "project",
+    "sub_project",
+    "brand",
+    "platform",
+    "type_of_work",
+    "rotation",
+    "work_count",
+    "remark",
+    "hours",
+    "minutes",
+    "date"
+  ];
+
+  if (!allowedColumns.includes(column)) {
+    return res.json({ success: false, message: "Invalid column" });
+  }
+
+  const sql = `
+    UPDATE media_monitoring_data
+    SET ${column} = ?
+    WHERE insert_id = ?
+  `;
+
+  db.query(sql, [value, id], (err) => {
+
+    if (err) {
+      console.error("❌ updateMediaMonitoringData error:", err.message);
+      return res.json({ success: false });
+    }
+
+    res.json({ success: true });
+
+  });
+
+});
 app.get("/getUsersByDepartment", (req, res) => {
   if (!db) return res.json([]);
 
