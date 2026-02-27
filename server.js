@@ -77,9 +77,9 @@ app.post("/login", (req, res) => {
 
   const { User_Mail, Password, Department } = req.body;
 
-  if (!User_Mail || !Password || !Department) {
-    return res.json({ success: false, message: "Missing fields" });
-  }
+ if (!User_Mail || !Password) {
+  return res.json({ success: false, message: "Missing fields" });
+}
 
   const sql = `
     SELECT *
