@@ -486,6 +486,58 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 });
 
 /* ======================
+   MEDIA MONITORING SUBMIT
+====================== */
+app.post("/submitMediaMonitoring", upload.none(), (req, res) => {
+
+  if (!db) {
+    return res.json({
+      success: false,
+      message: "Database not connected"
+    });
+  }
+
+  const data = req.body;
+
+  if (!data || Object.keys(data).length === 0) {
+    return res.json({
+      success: false,
+      message: "No data received"
+    });
+  }
+
+  delete data.insert_id;
+  delete data.created_at;
+
+  const columns = Object.keys(data);
+  const values = Object.values(data);
+  const placeholders = columns.map(() => "?").join(",");
+
+  const sql = `
+    INSERT INTO media_monitoring_data
+    (${columns.join(",")})
+    VALUES (${placeholders})
+  `;
+
+  db.query(sql, values, (err) => {
+
+    if (err) {
+      console.error("❌ Media Monitoring Insert Error:", err.message);
+      return res.json({
+        success: false,
+        message: err.message
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Media Monitoring submitted successfully"
+    });
+
+  });
+
+});
+/* ======================
    DASHBOARD DATA (ROLE BASED - QUERY)
 ====================== */
 app.get("/getDepartmentData", (req, res) => {
@@ -595,7 +647,65 @@ app.get("/getBrandInfringementData", (req, res) => {
   });
 });
 
-   
+/* ======================
+   MEDIA MONITORING DASHBOARD
+====================== */
+app.get("/getMediaMonitoringData", (req, res) => {
+
+  if (!db) return res.json([]);
+
+  const { user_mail, role, department } = req.query;
+
+  if (!user_mail || !role || !department) {
+    return res.json([]);
+  }
+
+  const roleUpper = role.trim().toUpperCase();
+
+  let sql = "";
+  let params = [];
+
+  if (["ADMIN","HR","TEAM_LEAD","DIRECTOR","HR_MANAGER"].includes(roleUpper)) {
+
+    sql = `
+      SELECT *
+      FROM media_monitoring_data
+      WHERE TRIM(department) = ?
+      ORDER BY date DESC
+    `;
+    params = [department];
+
+  } else {
+
+    sql = `
+      SELECT *
+      FROM media_monitoring_data
+      WHERE user_mail = ?
+      ORDER BY date DESC
+    `;
+    params = [user_mail];
+  }
+
+  db.query(sql, params, (err, rows) => {
+
+    if (err) {
+      console.error("❌ Media Monitoring Fetch Error:", err.message);
+      return res.json([]);
+    }
+
+    rows.forEach(r => {
+      if (!r.date && r.created_at) {
+        r.date = r.created_at;
+      }
+    });
+
+    res.json(rows);
+
+  });
+
+});
+
+
 app.get("/getUsersByDepartment", (req, res) => {
   if (!db) return res.json([]);
 
