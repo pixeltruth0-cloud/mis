@@ -175,6 +175,24 @@ return res.json({
 });      // login route close
 
 /* ======================
+   GET USER INFO (SESSION)
+====================== */
+app.get("/getUserInfo", (req, res) => {
+
+  if (!req.session.user) {
+    return res.status(401).json({
+      success:false,
+      message:"Not logged in"
+    });
+  }
+
+  res.json({
+    success:true,
+    user:req.session.user
+  });
+
+});
+/* ======================
    ADD USER (HR) ✅ FIXED
 ====================== */
 app.post("/addUser", upload.none(), (req, res) => {
@@ -873,6 +891,30 @@ app.get("/getUsersByDepartment", (req, res) => {
   });
 });
 
+/* ======================
+   GET USERS IN DEPARTMENT (ALIAS)
+====================== */
+app.get("/getUsersInDepartment", (req, res) => {
+
+  if (!db) return res.json([]);
+
+  const { department } = req.query;
+
+  if (!department) return res.json([]);
+
+  const sql = `
+    SELECT User_Name, User_Mail, Department
+    FROM mis_user_data
+    WHERE TRIM(Department) = ?
+      AND is_archived = 0
+  `;
+
+  db.query(sql, [department.trim()], (err, rows) => {
+    if (err) return res.json([]);
+    res.json(rows);
+  });
+
+});
 
 // ================= ASSIGN TASK =================
 app.post("/assignTask", (req, res) => {
