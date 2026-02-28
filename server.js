@@ -1389,42 +1389,152 @@ app.get("/getDepartmentUsers", (req, res) => {
    SUPER ADMIN DASHBOARD DATA
 ====================== */
 /* ======================
-   SUPER ADMIN DASHBOARD DATA (FILTERABLE)
+   SUPER ADMIN DASHBOARD (ALL DEPARTMENTS – MULTI TABLE)
 ====================== */
 app.get("/getSuperAdminDashboardData", (req, res) => {
-  if (!db) return res.json([]);
 
-  const { department } = req.query;
+  if (!db) return res.json({ success:false });
 
-  let sql = `
-    SELECT *
-    FROM social_media_n_website_audit_data
+  const today = new Date().toISOString().split("T")[0];
+
+  /* ===============================
+     STEP 1 – GET ALL ACTIVE USERS
+  =============================== */
+
+  const usersQuery = `
+    SELECT User_Mail, Department
+    FROM mis_user_data
+    WHERE is_archived = 0
+      AND Role NOT IN ('HR','Admin','Team_Lead','Director','HR Manager')
   `;
-  let params = [];
 
-  // 🔥 dropdown se department aaya ho to filter
-  if (department && department.trim() !== "") {
-    sql += " WHERE TRIM(Department) = ?";
-    params.push(department.trim());
-  }
+  db.query(usersQuery, (err, users) => {
 
-  sql += " ORDER BY date DESC";
-
-  db.query(sql, params, (err, rows) => {
     if (err) {
-      console.error("❌ Super admin dashboard error:", err.message);
-      return res.json([]);
+      console.error("❌ Users Query Error:", err.message);
+      return res.json({ success:false });
     }
 
-    // safety: date fallback
-    rows.forEach(r => {
-      if (!r.date && r.created_at) {
-        r.date = r.created_at;
+    if (!users.length) {
+      return res.json({ success:true, summary:{}, departments:[] });
+    }
+
+    /* ===============================
+       STEP 2 – GET TODAY SUBMISSIONS
+       FROM ALL TABLES USING UNION
+    =============================== */
+
+    const submissionQuery = `
+      SELECT DISTINCT user_mail FROM social_media_n_website_audit_data
+      WHERE DATE(created_at) = ?
+
+      UNION
+
+      SELECT DISTINCT user_mail FROM media_monitoring_data
+      WHERE DATE(created_at) = ?
+
+      UNION
+
+      SELECT DISTINCT user_mail FROM brand_infringement
+      WHERE DATE(created_at) = ?
+    `;
+
+    db.query(submissionQuery, [today, today, today], (err, submissions) => {
+
+      if (err) {
+        console.error("❌ Submission Query Error:", err.message);
+        return res.json({ success:false });
       }
+
+      /* ===============================
+         STEP 3 – GET INACTIVE (3 DAYS)
+      =============================== */
+
+      const inactiveQuery = `
+        SELECT COUNT(*) AS inactiveUsers
+        FROM mis_user_data u
+        WHERE u.is_archived = 0
+          AND u.Role NOT IN ('HR','Admin','Team_Lead','Director','HR Manager')
+          AND NOT EXISTS (
+            SELECT 1 FROM social_media_n_website_audit_data s
+              WHERE s.user_mail = u.User_Mail
+              AND s.created_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
+
+            UNION
+
+            SELECT 1 FROM media_monitoring_data m
+              WHERE m.user_mail = u.User_Mail
+              AND m.created_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
+
+            UNION
+
+            SELECT 1 FROM brand_infringement b
+              WHERE b.user_mail = u.User_Mail
+              AND b.created_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
+          )
+      `;
+
+      db.query(inactiveQuery, (err, inactiveRows) => {
+
+        if (err) {
+          console.error("❌ Inactive Query Error:", err.message);
+          return res.json({ success:false });
+        }
+
+        /* ===============================
+           STEP 4 – PROCESS DATA
+        =============================== */
+
+        const submittedSet = new Set(
+          submissions.map(s => s.user_mail)
+        );
+
+        let departmentMap = {};
+
+        users.forEach(u => {
+
+          if (!departmentMap[u.Department]) {
+            departmentMap[u.Department] = {
+              department: u.Department,
+              totalEmployees: 0,
+              submittedToday: 0
+            };
+          }
+
+          departmentMap[u.Department].totalEmployees++;
+
+          if (submittedSet.has(u.User_Mail)) {
+            departmentMap[u.Department].submittedToday++;
+          }
+
+        });
+
+        const departments = Object.values(departmentMap).map(d => ({
+          ...d,
+          missing: d.totalEmployees - d.submittedToday
+        }));
+
+        const totalDepartments = departments.length;
+        const totalEmployees = users.length;
+        const totalSubmittedToday = submissions.length;
+
+        res.json({
+          success:true,
+          summary:{
+            totalDepartments,
+            totalEmployees,
+            totalSubmittedToday,
+            inactiveUsers: inactiveRows[0].inactiveUsers
+          },
+          departments
+        });
+
+      });
+
     });
 
-    res.json(rows);
   });
+
 });
 
 app.get("/getSummary", (req, res) => {
