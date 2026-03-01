@@ -780,26 +780,29 @@ app.post("/updateApprovalStatus", (req, res) => {
   });
 
 });
+
+/* ======================
+   COMMON Task Assigment
+====================== */
 app.get("/getUsersByDepartment", (req, res) => {
   if (!db) return res.json([]);
 
   const { department } = req.query;
-
-  if (!department) {
-    return res.json([]);
-  }
+  if (!department) return res.json([]);
 
   const dept = department.trim();
 
   const sql = `
     SELECT 
-      User_Name,
-      User_Mail,
-      Department
-    FROM mis_user_data
-    WHERE TRIM(Department) = ?
-      AND Role != 'HR'
-      AND Role != 'Admin'
+      u.User_Name,
+      u.User_Mail,
+      d.department
+    FROM mis_user_data u
+    INNER JOIN user_departments d
+      ON u.User_Mail = d.user_mail
+    WHERE TRIM(d.department) = ?
+      AND u.is_archived = 0
+      AND TRIM(u.Role) NOT IN ('HR','Admin','Director','HR Manager')
   `;
 
   db.query(sql, [dept], (err, rows) => {
@@ -808,6 +811,7 @@ app.get("/getUsersByDepartment", (req, res) => {
       return res.json([]);
     }
 
+    console.log("Users found:", rows.length);
     res.json(rows);
   });
 });
