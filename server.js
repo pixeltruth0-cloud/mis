@@ -590,186 +590,91 @@ app.post("/submitMediaMonitoring", upload.none(), (req, res) => {
 /* ======================
    DASHBOARD DATA (ROLE BASED - QUERY)
 ====================== */
+/* ======================
+   SOCIAL MEDIA AUDIT DASHBOARD (ROLE BASED)
+====================== */
+/* ======================
+   COMMON DASHBOARD (ALL DEPARTMENTS)
+====================== */
 app.get("/getDepartmentData", (req, res) => {
-  if (!db) return res.json([]);
-
-  const { user_mail, role, department } = req.query;
-  if (!user_mail || !role || !department) return res.json([]);
-
-  const roleUpper = role
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, "_");
-
-  const dept = department.trim();
-  const userMail = user_mail.trim();
-
-  let sql = "";
-  let params = [];
-
-  // ✅ ADMIN / HR / TL / DIRECTOR → department data
-  if (["ADMIN", "HR", "TEAM_LEAD", "DIRECTOR", "HR_MANAGER"].includes(roleUpper)) {
-
-    sql = `
-      SELECT *
-      FROM social_media_n_website_audit_data
-      WHERE TRIM(department) = ?
-      ORDER BY date DESC
-    `;
-    params = [dept];
-
-  } 
-  // 👤 EMPLOYEE → only own department data
-  else {
-
-    sql = `
-      SELECT *
-      FROM social_media_n_website_audit_data
-      WHERE user_mail = ?
-        AND TRIM(department) = ?
-      ORDER BY date DESC
-    `;
-    params = [userMail, dept];
-  }
-
-  db.query(sql, params, (err, rows) => {
-    if (err) {
-      console.error("❌ DB Error:", err.message);
-      return res.json([]);
-    }
-
-    rows.forEach(r => {
-      if (!r.date && r.created_at) {
-        r.date = r.created_at;
-      }
-    });
-
-    res.json(rows);
-  });
-});
-
-
-/* ======================
-   BRAND INFRINGEMENT DASHBOARD
-====================== */
-app.get("/getBrandInfringementData", (req, res) => {
-
-  if (!db) return res.json([]);
-
-  const { user_mail, role } = req.query;
-
-  if (!user_mail || !role) return res.json([]);
-
-  const roleUpper = role.trim().toUpperCase();
-
-  let sql = "";
-  let params = [];
-
-  if (["ADMIN", "HR", "TEAM_LEAD", "DIRECTOR"].includes(roleUpper)) {
-    sql = `
-      SELECT *
-      FROM brand_infringement
-      ORDER BY date DESC
-    `;
-  } else {
-    sql = `
-      SELECT *
-      FROM brand_infringement
-      WHERE user_mail = ?
-      ORDER BY date DESC
-    `;
-    params = [user_mail];
-  }
-
-  db.query(sql, params, (err, rows) => {
-    if (err) {
-      console.error("❌ BI dashboard error:", err.message);
-      return res.json([]);
-    }
-
-    rows.forEach(r => {
-      if (!r.date && r.created_at) {
-        r.date = r.created_at;
-      }
-    });
-
-    res.json(rows);
-  });
-});
-
-/* ======================
-   MEDIA MONITORING DASHBOARD (UPDATED)
-====================== */
-
-app.get("/getMediaMonitoringData", (req, res) => {
 
   if (!db) {
-    return res.json({ success: false, data: [] });
+    return res.json({ success:false, data:[] });
   }
-
-  // 🔥 TEMP: Session check remove if cross-domain issue
-  // if (!req.session.user) {
-  //   return res.status(401).json({
-  //     success: false,
-  //     message: "Not logged in"
-  //   });
-  // }
 
   const { user_mail, role, department } = req.query;
 
   if (!user_mail || !role || !department) {
-    return res.json({ success: false, data: [] });
+    return res.json({ success:false, data:[] });
   }
 
   const roleUpper = role.trim().toUpperCase().replace(/\s+/g, "_");
   const dept = department.trim();
   const userMail = user_mail.trim();
 
+  /* ======================
+     🔥 TABLE MAPPING
+  ====================== */
+
+  let tableName = "";
+
+  if (dept === "Social_Media_N_Website_Audit") {
+    tableName = "social_media_n_website_audit_data";
+  }
+  else if (dept === "Media_Monitoring") {
+    tableName = "media_monitoring_data";
+  }
+  else if (dept === "Brand_Infringement") {
+    tableName = "brand_infringement";
+  }
+  else {
+    return res.json({ success:false, message:"Invalid department" });
+  }
+
   let sql = "";
   let params = [];
 
-  /* ===========================
+  /* ======================
      DIRECTOR / HR_MANAGER
-     → ALL DEPARTMENTS DATA
-  ============================ */
-  if (["Director", "HR_MANAGER"].includes(roleUpper)) {
+     → ALL DATA
+  ====================== */
+  if (["DIRECTOR","HR_MANAGER"].includes(roleUpper)) {
 
     sql = `
       SELECT *
-      FROM media_monitoring_data
-      ORDER BY date DESC, insert_id DESC
+      FROM ${tableName}
+      ORDER BY date DESC
     `;
-
   }
 
-  /* ===========================
+  /* ======================
      ADMIN / HR / TEAM_LEAD
      → FULL DEPARTMENT DATA
-  ============================ */
-  else if (["Admin", "HR", "TEAM_LEAD"].includes(roleUpper)) {
+  ====================== */
+  else if (["ADMIN","HR","TEAM_LEAD"].includes(roleUpper)) {
 
     sql = `
       SELECT *
-      FROM media_monitoring_data
+      FROM ${tableName}
       WHERE TRIM(department) = ?
-      ORDER BY date DESC, insert_id DESC
+      ORDER BY date DESC
     `;
 
     params = [dept];
   }
 
-  /* ===========================
-     ALL OTHER ROLES
+  /* ======================
+     EMPLOYEE / INTERN
      → ONLY OWN DATA
-  ============================ */
+  ====================== */
   else {
 
     sql = `
       SELECT *
-      FROM media_monitoring_data
+      FROM ${tableName}
       WHERE user_mail = ?
         AND TRIM(department) = ?
-      ORDER BY date DESC, insert_id DESC
+      ORDER BY date DESC
     `;
 
     params = [userMail, dept];
@@ -778,18 +683,20 @@ app.get("/getMediaMonitoringData", (req, res) => {
   db.query(sql, params, (err, rows) => {
 
     if (err) {
-      console.error("❌ Media Monitoring Fetch Error:", err.message);
-      return res.json({ success: false, data: [] });
+      console.error("❌ Common Dashboard Error:", err.message);
+      return res.json({ success:false, data:[] });
     }
 
     res.json({
-      success: true,
-      data: rows
+      success:true,
+      data:rows
     });
 
   });
 
 });
+
+
 /* ======================
    UPDATE MEDIA MONITORING DATA
 ====================== */
