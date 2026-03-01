@@ -732,7 +732,7 @@ app.get("/getMediaMonitoringData", (req, res) => {
      DIRECTOR / HR_MANAGER
      → ALL DEPARTMENTS DATA
   ============================ */
-  if (["DIRECTOR", "HR_MANAGER"].includes(roleUpper)) {
+  if (["Director", "HR_MANAGER"].includes(roleUpper)) {
 
     sql = `
       SELECT *
@@ -746,7 +746,7 @@ app.get("/getMediaMonitoringData", (req, res) => {
      ADMIN / HR / TEAM_LEAD
      → FULL DEPARTMENT DATA
   ============================ */
-  else if (["ADMIN", "HR", "TEAM_LEAD"].includes(roleUpper)) {
+  else if (["Admin", "HR", "TEAM_LEAD"].includes(roleUpper)) {
 
     sql = `
       SELECT *
