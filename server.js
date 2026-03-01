@@ -700,10 +700,21 @@ app.get("/getBrandInfringementData", (req, res) => {
 /* ======================
    MEDIA MONITORING DASHBOARD (UPDATED)
 ====================== */
+/* ======================
+   MEDIA MONITORING DASHBOARD (ROLE BASED - FINAL)
+====================== */
 app.get("/getMediaMonitoringData", (req, res) => {
 
   if (!db) {
     return res.json({ success: false, data: [] });
+  }
+
+  // 🔐 Session Security
+  if (!req.session.user) {
+    return res.status(401).json({
+      success: false,
+      message: "Not logged in"
+    });
   }
 
   const { user_mail, role, department } = req.query;
@@ -729,7 +740,6 @@ app.get("/getMediaMonitoringData", (req, res) => {
       SELECT *
       FROM media_monitoring_data
       ORDER BY date DESC, insert_id DESC
-      LIMIT 500
     `;
 
     params = [];
@@ -746,28 +756,52 @@ app.get("/getMediaMonitoringData", (req, res) => {
       FROM media_monitoring_data
       WHERE TRIM(department) = ?
       ORDER BY date DESC, insert_id DESC
-      LIMIT 500
     `;
 
     params = [dept];
   }
 
   /* ===========================
-     EMPLOYEE / INTERN
+     EMPLOYEE
      → ONLY OWN DATA
   ============================ */
-  else {
+  else if (roleUpper === "EMPLOYEE") {
 
     sql = `
       SELECT *
       FROM media_monitoring_data
       WHERE user_mail = ?
-        AND TRIM(department) = ?
       ORDER BY date DESC, insert_id DESC
-      LIMIT 200
     `;
 
-    params = [userMail, dept];
+    params = [userMail];
+  }
+
+  /* ===========================
+     INTERN
+     → ONLY OWN DATA
+  ============================ */
+  else if (roleUpper === "INTERN") {
+
+    sql = `
+      SELECT *
+      FROM media_monitoring_data
+      WHERE user_mail = ?
+      ORDER BY date DESC, insert_id DESC
+    `;
+
+    params = [userMail];
+  }
+
+  /* ===========================
+     ANY OTHER ROLE
+     → BLOCK ACCESS
+  ============================ */
+  else {
+    return res.status(403).json({
+      success: false,
+      message: "Unauthorized role"
+    });
   }
 
   db.query(sql, params, (err, rows) => {
@@ -777,12 +811,6 @@ app.get("/getMediaMonitoringData", (req, res) => {
       return res.json({ success: false, data: [] });
     }
 
-    rows.forEach(r => {
-      if (!r.date && r.created_at) {
-        r.date = r.created_at;
-      }
-    });
-
     res.json({
       success: true,
       data: rows
@@ -790,35 +818,7 @@ app.get("/getMediaMonitoringData", (req, res) => {
 
   });
 
-});;
-
-/* ======================
-   DELETE MEDIA MONITORING DATA
-====================== */
-app.post("/deleteMediaMonitoringData", (req, res) => {
-
-  if (!db) return res.json({ success: false });
-
-  const { id } = req.body;
-
-  if (!id) return res.json({ success: false });
-
-  const sql = `
-    DELETE FROM media_monitoring_data
-    WHERE insert_id = ?
-  `;
-
-  db.query(sql, [id], (err) => {
-    if (err) {
-      console.error("❌ deleteMediaMonitoringData error:", err.message);
-      return res.json({ success: false });
-    }
-
-    res.json({ success: true });
-  });
-
 });
-
 /* ======================
    UPDATE MEDIA MONITORING DATA
 ====================== */
