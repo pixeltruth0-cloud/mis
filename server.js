@@ -698,9 +698,6 @@ app.get("/getBrandInfringementData", (req, res) => {
 });
 
 /* ======================
-   MEDIA MONITORING DASHBOARD
-====================== */
-/* ======================
    MEDIA MONITORING DASHBOARD (UPDATED)
 ====================== */
 app.get("/getMediaMonitoringData", (req, res) => {
@@ -742,7 +739,7 @@ app.get("/getMediaMonitoringData", (req, res) => {
 
   /* ======================
      EMPLOYEE / INTERN
-     → Only own department data
+     → Only own data
   ====================== */
   else {
 
@@ -766,7 +763,7 @@ app.get("/getMediaMonitoringData", (req, res) => {
       return res.json({ success: false, data: [] });
     }
 
-    // Safety: fallback date
+    // safety fallback
     rows.forEach(r => {
       if (!r.date && r.created_at) {
         r.date = r.created_at;
