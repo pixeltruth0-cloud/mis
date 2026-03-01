@@ -1,4 +1,4 @@
-const express = require("express");   // ✅ ADD THIS LINE
+const express = require("express");
 const session = require("express-session");
 const mysql = require("mysql2");
 const cors = require("cors");
@@ -6,18 +6,15 @@ const multer = require("multer");
 
 const app = express();
 const upload = multer();
-;
 
-/* ======================
-   Middleware
-====================== */
+/* ====================== Middleware ====================== */
+
 app.use(cors({
   origin: "https://pixeltruth.com",
   credentials: true
 }));
 
 app.set("trust proxy", 1);
-
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -27,19 +24,17 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: isProduction,     // true only in production
+    secure: isProduction,
     sameSite: isProduction ? "none" : "lax",
     maxAge: 1000 * 60 * 60 * 24
   }
 }));
 
- // simple CORS (no credentials)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ======================
-   Database Connection
-====================== */
+/* ====================== Database Connection ====================== */
+
 let db = null;
 
 if (!process.env.DATABASE_URL) {
@@ -57,16 +52,13 @@ if (!process.env.DATABASE_URL) {
   });
 }
 
-/* ======================
-   Health Check
-====================== */
+/* ====================== Health Check ====================== */
+
 app.get("/", (req, res) => {
   res.send("MIS Backend is running ✅");
 });
 
-/* ======================
-   GET LOGGED IN USER INFO
-====================== */
+/* ====================== LOGIN ====================== */
 
 app.post("/login", (req, res) => {
 
@@ -76,126 +68,81 @@ app.post("/login", (req, res) => {
 
   const { User_Mail, Password, Department } = req.body;
 
- if (!User_Mail || !Password) {
-  return res.json({ success: false, message: "Missing fields" });
-}
+  if (!User_Mail || !Password) {
+    return res.json({ success: false, message: "Missing fields" });
+  }
 
   const sql = `
-    SELECT *
-    FROM mis_user_data
+    SELECT * FROM mis_user_data
     WHERE User_Mail = ?
-      AND Password = ?
-      AND is_archived = 0
+    AND Password = ?
+    AND is_archived = 0
     LIMIT 1
   `;
 
   db.query(sql, [User_Mail, Password], (err, rows) => {
+
     if (err || rows.length === 0) {
       return res.json({ success: false, message: "Invalid credentials" });
     }
 
     const user = rows[0];
 
-    // 🔐 Check if selected department is allowed
     const deptSql = `
-      SELECT department
-      FROM user_departments
-      WHERE user_mail = ?
-        AND department = ?
+      SELECT department FROM user_departments
+      WHERE user_mail = ? AND department = ?
     `;
 
     db.query(deptSql, [user.User_Mail, Department], (err, deptRows) => {
 
-  // ✅ Skip department validation for Super Admin
-  if (user.Role !== "Director" && user.Role !== "HR Manager") {
+      if (user.Role !== "Director" && user.Role !== "HR Manager") {
+        if (!err && deptRows.length === 0 && user.Department !== Department) {
+          return res.json({
+            success: false,
+            message: "Unauthorized department access"
+          });
+        }
+      }
 
-    if (!err && deptRows.length === 0 && user.Department !== Department) {
-      return res.json({
-        success: false,
-        message: "Unauthorized department access"
-      });
-    }
-
-  }
-
-      // ✅ Session
       req.session.user = {
         User_Name: user.User_Name,
         User_Mail: user.User_Mail,
         Role: user.Role,
         Department: Department,
-        Employee_ID: user.Employee_ID
+        Employee_ID: user.Employee_ID,
+        Designation: user.Designation,
+        Phone_Number: user.Phone_Number,
+        Reporting_Person: user.Reporting_Person
       };
 
-   const BASE_URL = "https://pixeltruth.com/mis";
-let redirectUrl = "";
+      const BASE_URL = "https://pixeltruth.com/mis";
+      let redirectUrl = "";
 
-if (user.Role === "Director" || user.Role === "HR Manager") {
-  redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
-}
-else if (user.Role === "HR" || user.Role === "Admin") {
-  redirectUrl = `${BASE_URL}/HR/${Department}/HR_dashboard.html`;
-}
-else if (user.Role === "Team_Lead") {
-  redirectUrl = `${BASE_URL}/TL/${Department}/TL_dashboard.html`;
-}
-else {
-  redirectUrl = `${BASE_URL}/${Department}/dashboard.html`;
-}
+      if (user.Role === "Director" || user.Role === "HR Manager") {
+        redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
+      } else if (user.Role === "HR" || user.Role === "Admin") {
+        redirectUrl = `${BASE_URL}/HR/${Department}/HR_dashboard.html`;
+      } else if (user.Role === "Team_Lead") {
+        redirectUrl = `${BASE_URL}/TL/${Department}/TL_dashboard.html`;
+      } else {
+        redirectUrl = `${BASE_URL}/${Department}/dashboard.html`;
+      }
 
-/* ✅ Session */
-req.session.user = {
-  User_Name: user.User_Name,
-  User_Mail: user.User_Mail,
-  Role: user.Role,
-  Department: Department,
-  Employee_ID: user.Employee_ID,
-  Designation: user.Designation,
-  Phone_Number: user.Phone_Number,
-  Reporting_Person: user.Reporting_Person
-};
+      return res.json({
+        success: true,
+        redirectUrl,
+        user: req.session.user
+      });
 
-/* ✅ Final Response */
-return res.json({
-  success: true,
-  redirectUrl,
-  user: {
-    User_Name: user.User_Name,
-    User_Mail: user.User_Mail,
-    Role: user.Role,
-    Department: Department,
-    Employee_ID: user.Employee_ID || "",
-    Designation: user.Designation || "",
-    Phone_Number: user.Phone_Number || "",
-    Reporting_Person: user.Reporting_Person || ""
-  }
-});
- });  // deptSql close
-  });    // main query close
-});      // login route close
-
-/* ======================
-   GET USER INFO (SESSION)
-====================== */
-app.get("/getUserInfo", (req, res) => {
-
-  if (!req.session.user) {
-    return res.status(401).json({
-      success:false,
-      message:"Not logged in"
     });
-  }
 
-  res.json({
-    success:true,
-    user:req.session.user
   });
 
 });
-/* ======================
-   ADD USER (HR) ✅ FIXED
-====================== */
+/* ====================== ADD USER ====================== */
+
 app.post("/addUser", upload.none(), (req, res) => {
+
   if (!db) {
     return res.json({ success: false, message: "DB not connected" });
   }
@@ -208,7 +155,8 @@ app.post("/addUser", upload.none(), (req, res) => {
     New_Reporting_Person,
     New_Role,
     New_Number,
-    New_Password
+    New_Password,
+    Department
   } = req.body;
 
   if (!New_Employee_ID || !New_Name || !New_User_Mail || !New_Role || !New_Password) {
@@ -240,7 +188,7 @@ app.post("/addUser", upload.none(), (req, res) => {
     New_Role,
     New_Number || "",
     New_Password,
-    req.body.Department || "Social_Media_N_Website_Audit"
+    Department || "Social_Media_N_Website_Audit"
   ];
 
   db.query(sql, values, (err) => {
@@ -251,15 +199,13 @@ app.post("/addUser", upload.none(), (req, res) => {
 
     res.json({ success: true });
   });
-});
 
-/* ======================
-   DELETE USER
-====================== */
+});
+/* ====================== DELETE USER ====================== */
+
 app.post("/deleteUser", (req, res) => {
-  if (!db) {
-    return res.json({ success: false });
-  }
+
+  if (!db) return res.json({ success: false });
 
   const { Employee_ID, User_Mail } = req.body;
 
@@ -280,14 +226,13 @@ app.post("/deleteUser", (req, res) => {
 
     res.json({ success: true });
   });
+
 });
-/* ======================
-   ARCHIVE USER (SOFT DELETE)
-====================== */
+/* ====================== ARCHIVE USER ====================== */
+
 app.post("/archiveUser", (req, res) => {
-  if (!db) {
-    return res.json({ success: false });
-  }
+
+  if (!db) return res.json({ success: false });
 
   const { Employee_ID } = req.body;
 
@@ -305,45 +250,74 @@ app.post("/archiveUser", (req, res) => {
 
     res.json({ success: true });
   });
+
 });
+/* ====================== GET DEPARTMENT USERS ====================== */
 
+app.get("/getDepartmentUsers", (req, res) => {
 
-/* ======================
-   INSERT PROJECT DATA (DAILY LIMIT PROTECTED)
-====================== */
+  if (!db) return res.json([]);
+
+  const sql = `
+    SELECT Employee_ID,
+           User_Name,
+           User_Mail,
+           Designation,
+           Department,
+           Role,
+           Phone_Number,
+           Reporting_Person
+    FROM mis_user_data
+    WHERE is_archived = 0
+    ORDER BY Employee_ID DESC
+  `;
+
+  db.query(sql, (err, rows) => {
+    if (err) {
+      console.error("❌ getDepartmentUsers error:", err.message);
+      return res.json([]);
+    }
+
+    res.json(rows);
+  });
+
+});
+/* ====================== SUBMIT PROJECT DATA ====================== */
+
 app.post("/submitProjectData", upload.none(), (req, res) => {
 
   if (!db) {
     return res.json({ success: false, message: "Database not connected" });
   }
 
-  // 🔥 STEP 1 — Clean [] keys properly
+  /* 🔥 STEP 1 – Clean [] keys properly */
   const rawData = req.body;
   const data = {};
 
-Object.keys(rawData).forEach(key => {
+  Object.keys(rawData).forEach(key => {
 
-  const cleanKey = key.replace(/\[\]$/, '');
+    const cleanKey = key.replace(/\[\]$/, "");
 
-  if (Array.isArray(rawData[key])) {
+    if (Array.isArray(rawData[key])) {
 
-    if (
-      cleanKey.endsWith("_hours") ||
-      cleanKey.endsWith("_minutes") ||
-      cleanKey.endsWith("_Count")
-    ) {
-      data[cleanKey] = rawData[key]
-        .map(v => Number(v) || 0)
-        .reduce((a, b) => a + b, 0);
+      if (
+        cleanKey.endsWith("_hours") ||
+        cleanKey.endsWith("_minutes") ||
+        cleanKey.endsWith("_Count")
+      ) {
+        data[cleanKey] = rawData[key]
+          .map(v => Number(v) || 0)
+          .reduce((a, b) => a + b, 0);
+      } else {
+        data[cleanKey] = rawData[key].join(", ");
+      }
+
     } else {
-      data[cleanKey] = rawData[key].join(", ");
+      data[cleanKey] = rawData[key];
     }
 
-  } else {
-    data[cleanKey] = rawData[key];
-  }
+  });
 
-});
   const { user_mail, department, date } = data;
 
   if (!user_mail || !department || !date) {
@@ -353,11 +327,10 @@ Object.keys(rawData).forEach(key => {
   const MAX_MINUTES = 8 * 60 + 20;
 
   const fetchSql = `
-    SELECT *
-    FROM social_media_n_website_audit_data
+    SELECT * FROM social_media_n_website_audit_data
     WHERE user_mail = ?
-      AND department = ?
-      AND date = ?
+    AND department = ?
+    AND date = ?
   `;
 
   db.query(fetchSql, [user_mail, department, date], (err, rows) => {
@@ -371,56 +344,63 @@ Object.keys(rawData).forEach(key => {
 
     rows.forEach(row => {
       Object.keys(row).forEach(key => {
+
         if (key.endsWith("_hours")) {
           existingMinutes += Number(row[key] || 0) * 60;
         }
+
         if (key.endsWith("_minutes")) {
           existingMinutes += Number(row[key] || 0);
         }
+
       });
     });
 
     let newMinutes = 0;
 
     Object.keys(data).forEach(key => {
+
       if (key.endsWith("_hours")) {
         newMinutes += Number(data[key] || 0) * 60;
       }
+
       if (key.endsWith("_minutes")) {
         newMinutes += Number(data[key] || 0);
       }
+
     });
 
     if (existingMinutes + newMinutes > MAX_MINUTES) {
       return res.json({
         success: false,
-        message: `Daily limit exceeded. Already used ${Math.floor(existingMinutes/60)}h ${existingMinutes%60}m`
+        message: `Daily limit exceeded. Already used ${Math.floor(existingMinutes / 60)}h ${existingMinutes % 60}m`
       });
     }
 
-    // 🔥 FIXED INSERT (STRICT ORDER MATCH)
+    /* 🔥 STRICT INSERT ORDER */
+
     const allowedColumns = [
       "user_name","user_mail","department","date",
-
       "Website_Audit_Brand","Website_Audit_Type_Of_Task","Website_Audit_hours","Website_Audit_minutes","Website_Audit_Remark","Website_Audit_Status",
-
       "Social_Media_Audit_Brand","Social_Media_Audit_Type_Of_Task","Social_Media_Audit_hours","Social_Media_Audit_minutes","Social_Media_Audit_Remark","Social_Media_Audit_Status",
-
       "Stationary_Brand","Stationary_Project","Stationary_Count","Stationary_hours","Stationary_minutes","Stationary_Remark",
-
       "Real_estimated_Brand","Real_estimated_Categories","Real_estimated_Count","Real_estimated_hours","Real_estimated_minutes","Real_estimated_Remark",
-
       "Incent_Brand","Incent_Count","Incent_Eastat_hours","Incent_Eastat_minutes","Incent_Remark",
-
       "ITC_Cigarette_Platform","ITC_Cigarette_Count","ITC_Cigarette_hours","ITC_Cigarette_minutes","ITC_Cigarette_Remark"
     ];
 
     const values = allowedColumns.map(col => {
-  if (col.endsWith("_hours") || col.endsWith("_minutes") || col.endsWith("_Count")) {
-    return data[col] ? Number(data[col]) : 0;
-  }
-  return data[col] ? data[col] : "";
-});
+
+      if (
+        col.endsWith("_hours") ||
+        col.endsWith("_minutes") ||
+        col.endsWith("_Count")
+      ) {
+        return data[col] ? Number(data[col]) : 0;
+      }
+
+      return data[col] || "";
+    });
 
     const placeholders = allowedColumns.map(() => "?").join(",");
 
@@ -431,53 +411,47 @@ Object.keys(rawData).forEach(key => {
     `;
 
     db.query(insertSql, values, (err) => {
-  if (err) {
-    console.error("❌ FINAL INSERT ERROR:", err.message);
-    return res.json({ success: false, message: err.message });
-  }
 
-  const totalUsedMinutes = existingMinutes + newMinutes;
-  const remainingMinutes = MAX_MINUTES - totalUsedMinutes;
+      if (err) {
+        console.error("❌ FINAL INSERT ERROR:", err.message);
+        return res.json({ success: false, message: err.message });
+      }
 
-  return res.json({
-    success: true,
-    message: "Data submitted successfully",
-    remainingHours: Math.floor(remainingMinutes / 60),
-    remainingMinutes: remainingMinutes % 60
+      const totalUsedMinutes = existingMinutes + newMinutes;
+      const remainingMinutes = MAX_MINUTES - totalUsedMinutes;
+
+      return res.json({
+        success: true,
+        message: "Data submitted successfully",
+        remainingHours: Math.floor(remainingMinutes / 60),
+        remainingMinutes: remainingMinutes % 60
+      });
+
+    });
+
   });
-});
-});  // ✅ CLOSE fetchSql query
 
-}); 
-/* ======================
-   BRAND INFRINGEMENT SUBMIT
-====================== */
+});
+/* ====================== SUBMIT BRAND INFRINGEMENT ====================== */
+
 app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 
   if (!db) {
-    return res.json({
-      success: false,
-      message: "Database not connected"
-    });
+    return res.json({ success: false, message: "Database not connected" });
   }
 
   const data = req.body;
 
   if (!data || Object.keys(data).length === 0) {
-    return res.json({
-      success: false,
-      message: "No data received"
-    });
+    return res.json({ success: false, message: "No data received" });
   }
 
-  // ❌ unwanted fields remove
   delete data.id;
   delete data.insert_id;
   delete data.created_at;
 
   const columns = Object.keys(data);
   const values = Object.values(data);
-
   const placeholders = columns.map(() => "?").join(",");
 
   const sql = `
@@ -487,36 +461,30 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
   `;
 
   db.query(sql, values, (err) => {
+
     if (err) {
       console.error("❌ Brand Infringement Insert Error:", err.message);
-      return res.json({
-        success: false,
-        message: "Insert failed"
-      });
+      return res.json({ success: false, message: "Insert failed" });
     }
 
     res.json({
       success: true,
       message: "Brand infringement submitted successfully"
     });
-  });
-});
 
-/* ======================
-   MEDIA MONITORING SUBMIT
-====================== */
+  });
+
+});
+/* ====================== SUBMIT MEDIA MONITORING ====================== */
+
 app.post("/submitMediaMonitoring", upload.none(), (req, res) => {
 
   if (!db) {
-    return res.json({
-      success: false,
-      message: "Database not connected"
-    });
+    return res.json({ success: false, message: "Database not connected" });
   }
 
   const data = req.body;
 
-  // 🔒 Required fields validation
   if (
     !data.user_name ||
     !data.user_mail ||
@@ -529,27 +497,14 @@ app.post("/submitMediaMonitoring", upload.none(), (req, res) => {
     !data.rotation ||
     !data.date
   ) {
-    return res.json({
-      success: false,
-      message: "Missing required fields"
-    });
+    return res.json({ success: false, message: "Missing required fields" });
   }
 
   const allowedColumns = [
-    "user_name",
-    "user_mail",
-    "department",
-    "project",
-    "sub_project",
-    "brand",
-    "platform",
-    "type_of_work",
-    "rotation",
-    "work_count",
-    "date",
-    "remark",
-    "hours",
-    "minutes"
+    "user_name","user_mail","department",
+    "project","sub_project","brand","platform",
+    "type_of_work","rotation","work_count",
+    "date","remark","hours","minutes"
   ];
 
   const values = allowedColumns.map(col => {
@@ -573,10 +528,7 @@ app.post("/submitMediaMonitoring", upload.none(), (req, res) => {
 
     if (err) {
       console.error("❌ Media Monitoring Insert Error:", err.message);
-      return res.json({
-        success: false,
-        message: err.message
-      });
+      return res.json({ success: false, message: err.message });
     }
 
     res.json({
@@ -587,52 +539,47 @@ app.post("/submitMediaMonitoring", upload.none(), (req, res) => {
   });
 
 });
-/* ======================
-   DASHBOARD DATA (ROLE BASED - QUERY)
-====================== */
+/* ====================== GET DEPARTMENT DATA ====================== */
+
 app.get("/getDepartmentData", (req, res) => {
+
   if (!db) return res.json([]);
 
   const { user_mail, role, department } = req.query;
-  if (!user_mail || !role || !department) return res.json([]);
 
-  const roleUpper = role
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, "_");
+  if (!user_mail || !role || !department) {
+    return res.json([]);
+  }
 
+  const roleUpper = role.trim().toUpperCase().replace(/\s+/g, "_");
   const dept = department.trim();
   const userMail = user_mail.trim();
 
   let sql = "";
   let params = [];
 
-  // ✅ ADMIN / HR / TL / DIRECTOR → department data
-  if (["ADMIN", "HR", "TEAM_LEAD", "DIRECTOR", "HR_MANAGER"].includes(roleUpper)) {
+  if (["ADMIN","HR","TEAM_LEAD","DIRECTOR","HR_MANAGER"].includes(roleUpper)) {
 
     sql = `
-      SELECT *
-      FROM social_media_n_website_audit_data
+      SELECT * FROM social_media_n_website_audit_data
       WHERE TRIM(department) = ?
       ORDER BY date DESC
     `;
     params = [dept];
 
-  } 
-  // 👤 EMPLOYEE → only own department data
-  else {
+  } else {
 
     sql = `
-      SELECT *
-      FROM social_media_n_website_audit_data
+      SELECT * FROM social_media_n_website_audit_data
       WHERE user_mail = ?
-        AND TRIM(department) = ?
+      AND TRIM(department) = ?
       ORDER BY date DESC
     `;
     params = [userMail, dept];
   }
 
   db.query(sql, params, (err, rows) => {
+
     if (err) {
       console.error("❌ DB Error:", err.message);
       return res.json([]);
@@ -645,64 +592,12 @@ app.get("/getDepartmentData", (req, res) => {
     });
 
     res.json(rows);
+
   });
+
 });
+/* ====================== GET MEDIA MONITORING DATA ====================== */
 
-
-/* ======================
-   BRAND INFRINGEMENT DASHBOARD
-====================== */
-app.get("/getBrandInfringementData", (req, res) => {
-
-  if (!db) return res.json([]);
-
-  const { user_mail, role } = req.query;
-
-  if (!user_mail || !role) return res.json([]);
-
-  const roleUpper = role.trim().toUpperCase();
-
-  let sql = "";
-  let params = [];
-
-  if (["ADMIN", "HR", "TEAM_LEAD", "DIRECTOR"].includes(roleUpper)) {
-    sql = `
-      SELECT *
-      FROM brand_infringement
-      ORDER BY date DESC
-    `;
-  } else {
-    sql = `
-      SELECT *
-      FROM brand_infringement
-      WHERE user_mail = ?
-      ORDER BY date DESC
-    `;
-    params = [user_mail];
-  }
-
-  db.query(sql, params, (err, rows) => {
-    if (err) {
-      console.error("❌ BI dashboard error:", err.message);
-      return res.json([]);
-    }
-
-    rows.forEach(r => {
-      if (!r.date && r.created_at) {
-        r.date = r.created_at;
-      }
-    });
-
-    res.json(rows);
-  });
-});
-
-/* ======================
-   MEDIA MONITORING DASHBOARD
-====================== */
-/* ======================
-   MEDIA MONITORING DASHBOARD (UPDATED)
-====================== */
 app.get("/getMediaMonitoringData", (req, res) => {
 
   if (!db) {
@@ -722,41 +617,26 @@ app.get("/getMediaMonitoringData", (req, res) => {
   let sql = "";
   let params = [];
 
-  /* ======================
-     ADMIN / HR / TL / DIRECTOR
-     → Full department data
-  ====================== */
   if (["ADMIN","HR","TEAM_LEAD","DIRECTOR","HR_MANAGER"].includes(roleUpper)) {
 
     sql = `
-      SELECT *
-      FROM media_monitoring_data
+      SELECT * FROM media_monitoring_data
       WHERE TRIM(department) = ?
       ORDER BY date DESC, insert_id DESC
       LIMIT 200
     `;
-
     params = [dept];
 
-  }
-
-  /* ======================
-     EMPLOYEE / INTERN
-     → Only own department data
-  ====================== */
-  else {
+  } else {
 
     sql = `
-      SELECT *
-      FROM media_monitoring_data
+      SELECT * FROM media_monitoring_data
       WHERE user_mail = ?
-        AND TRIM(department) = ?
+      AND TRIM(department) = ?
       ORDER BY date DESC, insert_id DESC
       LIMIT 200
     `;
-
     params = [userMail, dept];
-
   }
 
   db.query(sql, params, (err, rows) => {
@@ -766,157 +646,19 @@ app.get("/getMediaMonitoringData", (req, res) => {
       return res.json({ success: false, data: [] });
     }
 
-    // Safety: fallback date
     rows.forEach(r => {
       if (!r.date && r.created_at) {
         r.date = r.created_at;
       }
     });
 
-    res.json({
-      success: true,
-      data: rows
-    });
+    res.json({ success: true, data: rows });
 
   });
 
 });
+/* ====================== ASSIGN TASK ====================== */
 
-/* ======================
-   DELETE MEDIA MONITORING DATA
-====================== */
-app.post("/deleteMediaMonitoringData", (req, res) => {
-
-  if (!db) return res.json({ success: false });
-
-  const { id } = req.body;
-
-  if (!id) return res.json({ success: false });
-
-  const sql = `
-    DELETE FROM media_monitoring_data
-    WHERE insert_id = ?
-  `;
-
-  db.query(sql, [id], (err) => {
-    if (err) {
-      console.error("❌ deleteMediaMonitoringData error:", err.message);
-      return res.json({ success: false });
-    }
-
-    res.json({ success: true });
-  });
-
-});
-
-/* ======================
-   UPDATE MEDIA MONITORING DATA
-====================== */
-app.post("/updateMediaMonitoringData", (req, res) => {
-
-  if (!db) return res.json({ success: false });
-
-  const { id, column, value } = req.body;
-
-  if (!id || !column) {
-    return res.json({ success: false });
-  }
-
-  // 🔒 Allowed editable columns
-  const allowedColumns = [
-    "project",
-    "sub_project",
-    "brand",
-    "platform",
-    "type_of_work",
-    "rotation",
-    "work_count",
-    "remark",
-    "hours",
-    "minutes",
-    "date"
-  ];
-
-  if (!allowedColumns.includes(column)) {
-    return res.json({ success: false, message: "Invalid column" });
-  }
-
-  const sql = `
-    UPDATE media_monitoring_data
-    SET ${column} = ?
-    WHERE insert_id = ?
-  `;
-
-  db.query(sql, [value, id], (err) => {
-
-    if (err) {
-      console.error("❌ updateMediaMonitoringData error:", err.message);
-      return res.json({ success: false });
-    }
-
-    res.json({ success: true });
-
-  });
-
-});
-app.get("/getUsersByDepartment", (req, res) => {
-  if (!db) return res.json([]);
-
-  const { department } = req.query;
-
-  if (!department) {
-    return res.json([]);
-  }
-
-  const dept = department.trim();
-
-  const sql = `
-    SELECT 
-      User_Name,
-      User_Mail,
-      Department
-    FROM mis_user_data
-    WHERE TRIM(Department) = ?
-      AND Role != 'HR'
-      AND Role != 'Admin'
-  `;
-
-  db.query(sql, [dept], (err, rows) => {
-    if (err) {
-      console.error("❌ getUsersByDepartment error:", err.message);
-      return res.json([]);
-    }
-
-    res.json(rows);
-  });
-});
-
-/* ======================
-   GET USERS IN DEPARTMENT (ALIAS)
-====================== */
-app.get("/getUsersInDepartment", (req, res) => {
-
-  if (!db) return res.json([]);
-
-  const { department } = req.query;
-
-  if (!department) return res.json([]);
-
-  const sql = `
-    SELECT User_Name, User_Mail, Department
-    FROM mis_user_data
-    WHERE TRIM(Department) = ?
-      AND is_archived = 0
-  `;
-
-  db.query(sql, [department.trim()], (err, rows) => {
-    if (err) return res.json([]);
-    res.json(rows);
-  });
-
-});
-
-// ================= ASSIGN TASK =================
 app.post("/assignTask", (req, res) => {
 
   if (!db) {
@@ -924,7 +666,7 @@ app.post("/assignTask", (req, res) => {
   }
 
   const {
-    users,                 // 🔥 ARRAY
+    users,
     task_title,
     task_description,
     due_date,
@@ -934,33 +676,16 @@ app.post("/assignTask", (req, res) => {
     assigned_by
   } = req.body;
 
-  if (
-    !users || !Array.isArray(users) || users.length === 0 ||
-    !task_title || !due_date || !priority || !department
-  ) {
-    return res.json({
-      success: false,
-      message: "Missing required fields"
-    });
+  if (!users || !Array.isArray(users) || users.length === 0 || !task_title || !due_date || !priority || !department) {
+    return res.json({ success: false, message: "Missing required fields" });
   }
 
-  const tableName =
-    "assigned_tasks_" +
+  const tableName = "assigned_tasks_" +
     department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
   const sql = `
     INSERT INTO ${tableName}
-    (
-      user_name,
-      user_mail,
-      task_title,
-      task_description,
-      due_date,
-      estimated_hours,
-      priority,
-      assigned_by,
-      assigned_at
-    )
+    (user_name,user_mail,task_title,task_description,due_date,estimated_hours,priority,assigned_by,assigned_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
   `;
 
@@ -989,21 +714,24 @@ app.post("/assignTask", (req, res) => {
 
       inserted++;
 
-      // jab sab users insert ho jaaye
       if (inserted === users.length) {
+
         if (hasError) {
           return res.json({
             success: false,
-            message: "Some tasks failed to assign"
+            message: "Some tasks failed"
           });
         }
+
         return res.json({ success: true });
+
       }
+
     });
+
   });
+
 });
-
-
 app.post("/updateTaskStatus", (req, res) => {
 
   if (!db) return res.json({ success:false });
@@ -1014,8 +742,7 @@ app.post("/updateTaskStatus", (req, res) => {
     return res.json({ success:false });
   }
 
-  const tableName =
-    "assigned_tasks_" +
+  const tableName = "assigned_tasks_" +
     department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
   const sql = `
@@ -1025,429 +752,64 @@ app.post("/updateTaskStatus", (req, res) => {
   `;
 
   db.query(sql, [task_status, status_note || "", task_id], err => {
+
     if (err) {
-      console.error("❌ Status update error:", err);
+      console.error("❌ Status update error:", err.message);
       return res.json({ success:false });
     }
+
     res.json({ success:true });
+
   });
+
 });
-
-app.post("/updateTask", (req, res) => {
-  if (!db) return res.json({ success: false });
-
-  const {
-    task_id,
-    user_name,
-    user_mail,
-    task_title,
-    task_description,
-    due_date,
-    estimated_hours,
-    department
-  } = req.body;
-
-  if (!task_id || !department) {
-    return res.json({ success: false });
-  }
-
-  const tableName =
-    "assigned_tasks_" +
-    department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-
-  const sql = `
-    UPDATE ${tableName}
-    SET
-      user_name = ?,
-      user_mail = ?,
-      task_title = ?,
-      task_description = ?,
-      due_date = ?,
-      estimated_hours = ?
-    WHERE id = ?
-  `;
-
-  const values = [
-    user_name,
-    user_mail,
-    task_title,
-    task_description || "",
-    due_date,
-    estimated_hours || 0,
-    task_id
-  ];
-
-  db.query(sql, values, (err) => {
-    if (err) {
-      console.error("❌ updateTask error:", err.message);
-      return res.json({ success: false });
-    }
-
-    res.json({ success: true });
-  });
-});
-app.post("/deleteTask", (req, res) => {
-  if (!db) return res.json({ success: false });
-
-  const { task_id, department } = req.body;
-  if (!task_id || !department) return res.json({ success: false });
-
-  const tableName =
-    "assigned_tasks_" +
-    department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-
-  const sql = `DELETE FROM ${tableName} WHERE id = ?`;
-
-  db.query(sql, [task_id], (err) => {
-    if (err) {
-      console.error("❌ deleteTask error:", err.message);
-      return res.json({ success: false });
-    }
-
-    res.json({ success: true });
-  });
-});
-
-/* ======================
-   DELETE DEPARTMENT DATA
-====================== */
-app.post("/deleteDepartmentData", (req, res) => {
-
-  if (!db) return res.json({ success: false });
-
-  const { id } = req.body;
-
-  if (!id) return res.json({ success: false });
-
-  const sql = `
-    DELETE FROM social_media_n_website_audit_data
-    WHERE insert_id = ?
-  `;
-
-  db.query(sql, [id], (err) => {
-    if (err) {
-      console.error("❌ deleteDepartmentData error:", err.message);
-      return res.json({ success: false });
-    }
-
-    res.json({ success: true });
-  });
-});
-
-/* ======================
-   UPDATE DEPARTMENT DATA
-====================== */
-app.post("/updateDepartmentData", (req, res) => {
-
-  if (!db) return res.json({ success: false });
-
-  const { id, column, value } = req.body;
-
-  if (!id || !column) {
-    return res.json({ success: false });
-  }
-
-  const allowedColumns = [
-    "category",
-    "count",
-    "hours",
-    "minutes",
-    "remarks",
-    "real_estimated_hours",
-    "real_estimated_minutes",
-    "real_estimated_remarks",
-    "impact_brand",
-    "impact_count",
-    "impact_hours",
-    "impact_minutes",
-    "impact_remarks",
-    "itc_platform"
-  ];
-
-  if (!allowedColumns.includes(column)) {
-    return res.json({ success: false, message: "Invalid column" });
-  }
-
-  const sql = `
-    UPDATE social_media_n_website_audit_data
-    SET ${column} = ?
-    WHERE insert_id = ?
-  `;
-
-  db.query(sql, [value, id], (err) => {
-    if (err) {
-      console.error("❌ updateDepartmentData error:", err.message);
-      return res.json({ success: false });
-    }
-
-    res.json({ success: true });
-  });
-});
-/* ======================
-   GET ASSIGNED TASKS (DEPT WISE)
-====================== */
-app.get("/getAssignedTasks", (req, res) => {
-
-  if (!db) {
-    return res.json({ success: false, data: [] });
-  }
-
-  const { department } = req.query;
-
-  if (!department) {
-    return res.json({ success: false, data: [] });
-  }
-
-  const tableName =
-    "assigned_tasks_" +
-    department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-
-  const sql = `
-    SELECT
-      id,
-      user_name,
-      user_mail,
-      task_title,
-      task_description,
-      due_date,
-      estimated_hours,
-      priority,
-      assigned_by,
-      task_status,
-      status_note,
-      assigned_at
-    FROM ${tableName}
-    ORDER BY assigned_at DESC
-  `;
-
-  db.query(sql, (err, rows) => {
-    if (err) {
-      console.error("❌ Get assigned tasks error:", err.message);
-      return res.json({ success: false, data: [] });
-    }
-
-    res.json({
-      success: true,
-      data: rows
-    });
-  });
-});
-
-
-
-app.get("/getTaskById", (req, res) => {
-  if (!db) return res.json({});
-
-  const { id, department } = req.query;
-  if (!id || !department) return res.json({});
-
-  const tableName =
-    "assigned_tasks_" +
-    department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-
-  const sql = `SELECT * FROM ${tableName} WHERE id = ? LIMIT 1`;
-
-  db.query(sql, [id], (err, rows) => {
-    if (err || rows.length === 0) {
-      console.error("❌ getTaskById error:", err?.message);
-      return res.json({});
-    }
-
-    res.json(rows[0]);
-  });
-});
-
-/* ======================
-   TL DASHBOARD DATA (DEPARTMENT WISE)
-====================== */
-app.get("/getTLDashboardData", (req, res) => {
-  if (!db) {
-    return res.json({ success: false });
-  }
-
-  const { department } = req.query;
-
-  if (!department) {
-    return res.json({ success: false });
-  }
-
-  const dept = department.trim();
-
-  const tableName =
-    "assigned_tasks_" +
-    dept.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-
-  const today = new Date().toISOString().split("T")[0];
-
-  const teamCountSql = `
-    SELECT COUNT(*) AS count
-    FROM mis_user_data
-    WHERE Department = ?
-      AND Role NOT IN ('HR', 'Admin', 'Team_Lead')
-      AND is_archived = 0
-  `;
-
-  const totalTasksSql = `SELECT COUNT(*) AS count FROM ${tableName}`;
-
-  const todayTasksSql = `
-    SELECT COUNT(*) AS count
-    FROM ${tableName}
-    WHERE DATE(created_at) = ?
-  `;
-
-  const pendingSql = `
-    SELECT COUNT(*) AS count
-    FROM ${tableName}
-    WHERE task_status = 'Pending'
-  `;
-
-  const completedSql = `
-    SELECT COUNT(*) AS count
-    FROM ${tableName}
-    WHERE task_status = 'Completed'
-  `;
-
-  db.query(teamCountSql, [dept], (err, teamRows) => {
-    if (err) {
-      console.error("❌ teamCount error:", err.message);
-      return res.json({ success: false });
-    }
-
-    db.query(totalTasksSql, (err, totalRows) => {
-      if (err) {
-        console.error("❌ totalTasks error:", err.message);
-        return res.json({ success: false });
-      }
-
-      db.query(todayTasksSql, [today], (err, todayRows) => {
-        if (err) {
-          console.error("❌ todayTasks error:", err.message);
-          return res.json({ success: false });
-        }
-
-        db.query(pendingSql, (err, pendingRows) => {
-          if (err) {
-            console.error("❌ pendingTasks error:", err.message);
-            return res.json({ success: false });
-          }
-
-          db.query(completedSql, (err, completedRows) => {
-            if (err) {
-              console.error("❌ completedTasks error:", err.message);
-              return res.json({ success: false });
-            }
-
-            res.json({
-              success: true,
-              teamCount: teamRows[0].count,
-              totalTasks: totalRows[0].count,
-              todayTasks: todayRows[0].count,
-              pendingTasks: pendingRows[0].count,
-              completedTasks: completedRows[0].count
-            });
-          });
-        });
-      });
-    });
-  });
-});
-
-/* ======================
-   GET MY TASKS (USER SIDE) ✅ FIXED
-====================== */
 app.get("/getMyTasks", (req, res) => {
-  if (!db) {
-    return res.json({ success: false, data: [] });
-  }
+
+  if (!db) return res.json({ success:false, data:[] });
 
   const { department, user_mail } = req.query;
 
   if (!department || !user_mail) {
-    return res.json({ success: false, data: [] });
+    return res.json({ success:false, data:[] });
   }
 
-  const tableName =
-    "assigned_tasks_" +
+  const tableName = "assigned_tasks_" +
     department.toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
   const sql = `
-    SELECT
-      id,
-      task_title,
-      task_description,
-      due_date,
-      estimated_hours,
-      priority,          -- ✅ PRIORITY INCLUDED
-      assigned_by,
-      task_status,
-      status_note
+    SELECT id, task_title, task_description, due_date,
+           estimated_hours, priority,
+           assigned_by, task_status, status_note
     FROM ${tableName}
-    WHERE user_mail = ?          -- ✅ VERY IMPORTANT
+    WHERE user_mail = ?
     ORDER BY due_date ASC
   `;
 
   db.query(sql, [user_mail], (err, rows) => {
+
     if (err) {
       console.error("❌ getMyTasks error:", err.message);
-      return res.json({ success: false, data: [] });
+      return res.json({ success:false, data:[] });
     }
 
-    res.json({ success: true, data: rows });
+    res.json({ success:true, data:rows });
+
   });
+
 });
+/* ====================== SUPER ADMIN DASHBOARD ====================== */
 
-
-/* ======================
-   GET USERS (HR) – NON ARCHIVED ONLY
-====================== */
-app.get("/getDepartmentUsers", (req, res) => {
-  if (!db) return res.json([]);
-
-  const sql = `
-    SELECT 
-      Employee_ID,
-      User_Name,
-      User_Mail,
-      Designation,
-      Department,
-      Role,
-      Phone_Number,
-      Reporting_Person
-    FROM mis_user_data
-    WHERE is_archived = 0
-    ORDER BY Employee_ID DESC
-  `;
-
-  db.query(sql, (err, rows) => {
-    if (err) {
-      console.error("❌ getDepartmentUsers error:", err.message);
-      return res.json([]);
-    }
-    res.json(rows);
-  });
-});
-
-/* ======================
-   SUPER ADMIN DASHBOARD DATA
-====================== */
-/* ======================
-   SUPER ADMIN DASHBOARD (ALL DEPARTMENTS – MULTI TABLE)
-====================== */
 app.get("/getSuperAdminDashboardData", (req, res) => {
 
   if (!db) return res.json({ success:false });
 
   const today = new Date().toISOString().split("T")[0];
 
-  /* ===============================
-     STEP 1 – GET ALL ACTIVE USERS
-  =============================== */
-
   const usersQuery = `
     SELECT User_Mail, Department
     FROM mis_user_data
     WHERE is_archived = 0
-      AND Role NOT IN ('HR','Admin','Team_Lead','Director','HR Manager')
+    AND Role NOT IN ('HR','Admin','Team_Lead','Director','HR Manager')
   `;
 
   db.query(usersQuery, (err, users) => {
@@ -1461,116 +823,57 @@ app.get("/getSuperAdminDashboardData", (req, res) => {
       return res.json({ success:true, summary:{}, departments:[] });
     }
 
-    /* ===============================
-       STEP 2 – GET TODAY SUBMISSIONS
-       FROM ALL TABLES USING UNION
-    =============================== */
-
     const submissionQuery = `
-      SELECT DISTINCT user_mail FROM social_media_n_website_audit_data
-      WHERE DATE(created_at) = ?
-
+      SELECT DISTINCT user_mail FROM social_media_n_website_audit_data WHERE DATE(created_at)=?
       UNION
-
-      SELECT DISTINCT user_mail FROM media_monitoring_data
-      WHERE DATE(created_at) = ?
-
+      SELECT DISTINCT user_mail FROM media_monitoring_data WHERE DATE(created_at)=?
       UNION
-
-      SELECT DISTINCT user_mail FROM brand_infringement
-      WHERE DATE(created_at) = ?
+      SELECT DISTINCT user_mail FROM brand_infringement WHERE DATE(created_at)=?
     `;
 
-    db.query(submissionQuery, [today, today, today], (err, submissions) => {
+    db.query(submissionQuery, [today,today,today], (err, submissions) => {
 
       if (err) {
-        console.error("❌ Submission Query Error:", err.message);
+        console.error("❌ Submission Error:", err.message);
         return res.json({ success:false });
       }
 
-      /* ===============================
-         STEP 3 – GET INACTIVE (3 DAYS)
-      =============================== */
+      const submittedSet = new Set(submissions.map(s => s.user_mail));
 
-      const inactiveQuery = `
-        SELECT COUNT(*) AS inactiveUsers
-        FROM mis_user_data u
-        WHERE u.is_archived = 0
-          AND u.Role NOT IN ('HR','Admin','Team_Lead','Director','HR Manager')
-          AND NOT EXISTS (
-            SELECT 1 FROM social_media_n_website_audit_data s
-              WHERE s.user_mail = u.User_Mail
-              AND s.created_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
+      let departmentMap = {};
 
-            UNION
+      users.forEach(u => {
 
-            SELECT 1 FROM media_monitoring_data m
-              WHERE m.user_mail = u.User_Mail
-              AND m.created_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
-
-            UNION
-
-            SELECT 1 FROM brand_infringement b
-              WHERE b.user_mail = u.User_Mail
-              AND b.created_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
-          )
-      `;
-
-      db.query(inactiveQuery, (err, inactiveRows) => {
-
-        if (err) {
-          console.error("❌ Inactive Query Error:", err.message);
-          return res.json({ success:false });
+        if (!departmentMap[u.Department]) {
+          departmentMap[u.Department] = {
+            department: u.Department,
+            totalEmployees: 0,
+            submittedToday: 0
+          };
         }
 
-        /* ===============================
-           STEP 4 – PROCESS DATA
-        =============================== */
+        departmentMap[u.Department].totalEmployees++;
 
-        const submittedSet = new Set(
-          submissions.map(s => s.user_mail)
-        );
+        if (submittedSet.has(u.User_Mail)) {
+          departmentMap[u.Department].submittedToday++;
+        }
 
-        let departmentMap = {};
+      });
 
-        users.forEach(u => {
-
-          if (!departmentMap[u.Department]) {
-            departmentMap[u.Department] = {
-              department: u.Department,
-              totalEmployees: 0,
-              submittedToday: 0
-            };
-          }
-
-          departmentMap[u.Department].totalEmployees++;
-
-          if (submittedSet.has(u.User_Mail)) {
-            departmentMap[u.Department].submittedToday++;
-          }
-
-        });
-
-        const departments = Object.values(departmentMap).map(d => ({
+      const departments = Object.values(departmentMap)
+        .map(d => ({
           ...d,
           missing: d.totalEmployees - d.submittedToday
         }));
 
-        const totalDepartments = departments.length;
-        const totalEmployees = users.length;
-        const totalSubmittedToday = submissions.length;
-
-        res.json({
-          success:true,
-          summary:{
-            totalDepartments,
-            totalEmployees,
-            totalSubmittedToday,
-            inactiveUsers: inactiveRows[0].inactiveUsers
-          },
-          departments
-        });
-
+      res.json({
+        success:true,
+        summary:{
+          totalDepartments: departments.length,
+          totalEmployees: users.length,
+          totalSubmittedToday: submissions.length
+        },
+        departments
       });
 
     });
@@ -1578,124 +881,8 @@ app.get("/getSuperAdminDashboardData", (req, res) => {
   });
 
 });
+/* ====================== SERVER START ====================== */
 
-app.get("/getSummary", (req, res) => {
-
-  if (!db) return res.json({ success:false });
-
-  const { department, role, type, from, to } = req.query;
-
-  // 🔐 ROLE VALIDATION
-  if (role !== "Director" && role !== "HR Manager") {
-    return res.status(403).json({
-      success:false,
-      message:"Unauthorized"
-    });
-  }
-
-  if (!department) {
-    return res.json({ success:false, message:"Department required" });
-  }
-
-  /* ==========================
-     🔥 DYNAMIC TABLE MAPPING
-  ========================== */
-
-  let tableName = "";
-
-  if (department === "Social_Media_N_Website_Audit") {
-    tableName = "social_media_n_website_audit_data";
-  }
-  else if (department === "Brand_Infringement") {
-    tableName = "brand_infringement";
-  }
-  else if (department === "Media_Monitoring") {
-    tableName = "media_monitoring_data";
-  }
-  else {
-    return res.json({ success:false, message:"Invalid department" });
-  }
-
-  let sql = `SELECT * FROM ${tableName} WHERE department = ?`;
-  let params = [department];
-
-  /* ==============================
-     DATE RANGE / TYPE FILTER
-  ============================== */
-
-  if (from && to) {
-
-    sql += " AND DATE(date) BETWEEN ? AND ?";
-    params.push(from, to);
-
-  } else if (type) {
-
-    if (type === "day") {
-      sql += " AND DATE(date) = CURDATE()";
-    }
-    else if (type === "week") {
-      sql += " AND YEARWEEK(date, 1) = YEARWEEK(CURDATE(), 1)";
-    }
-    else if (type === "month") {
-      sql += " AND MONTH(date) = MONTH(CURDATE()) AND YEAR(date) = YEAR(CURDATE())";
-    }
-    else {
-      return res.json({ success:false, message:"Invalid type" });
-    }
-
-  }
-
-  sql += " ORDER BY date DESC";
-
-  db.query(sql, params, (err, rows) => {
-
-    if (err) {
-      console.error("❌ Summary Error:", err.message);
-      return res.json({ success:false });
-    }
-
-    let totalMinutes = 0;
-
-    rows.forEach(row => {
-
-      Object.keys(row).forEach(key => {
-
-        // ✅ Social Media style (_hours/_minutes)
-        if (key.endsWith("_hours")) {
-          totalMinutes += Number(row[key] || 0) * 60;
-        }
-
-        if (key.endsWith("_minutes")) {
-          totalMinutes += Number(row[key] || 0);
-        }
-
-        // ✅ Media Monitoring style (hours/minutes)
-        if (key === "hours") {
-          totalMinutes += Number(row[key] || 0) * 60;
-        }
-
-        if (key === "minutes") {
-          totalMinutes += Number(row[key] || 0);
-        }
-
-      });
-
-    });
-
-    res.json({
-      success:true,
-      totalEntries: rows.length,
-      totalHours: Math.floor(totalMinutes / 60),
-      totalMinutes: totalMinutes % 60,
-      rawData: rows
-    });
-
-  });
-
-});
-/* ======================
-   Server Start
-====================== */
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
