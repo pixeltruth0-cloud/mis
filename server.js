@@ -685,7 +685,6 @@ db.query(sql, params, (err, rows) => {
   res.json(rows);
   });
 
-  });
 
 });
 
