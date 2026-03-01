@@ -675,16 +675,15 @@ app.get("/getDepartmentData", (req, res) => {
     params = [userMail, dept];
   }
 
-  db.query(sql, params, (err, rows) => {
+db.query(sql, params, (err, rows) => {
 
-    if (err) {
-      console.error("❌ Common Dashboard Error:", err.message);
-      return res.json({ success:false, data:[] });
-    }
+  if (err) {
+    console.error("❌ Common Dashboard Error:", err.message);
+    return res.json([]);
+  }
 
-    res.json({
-      data:rows;
-    });
+  res.json(rows);
+  });
 
   });
 
