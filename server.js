@@ -594,22 +594,18 @@ app.post("/submitMediaMonitoring", upload.none(), (req, res) => {
 app.get("/getDepartmentData", (req, res) => {
 
   if (!db) {
-    return res.json({ success:false, data:[] });
+    return res.json([]);
   }
 
   const { user_mail, role, department } = req.query;
 
   if (!user_mail || !role || !department) {
-    return res.json({ success:false, data:[] });
+    return res.json([]);
   }
 
   const roleUpper = role.trim().toUpperCase().replace(/\s+/g, "_");
   const dept = department.trim();
   const userMail = user_mail.trim();
-
-  /* ======================
-     🔥 TABLE MAPPING
-  ====================== */
 
   let tableName = "";
 
@@ -623,16 +619,12 @@ app.get("/getDepartmentData", (req, res) => {
     tableName = "brand_infringement";
   }
   else {
-    return res.json({ success:false, message:"Invalid department" });
+    return res.json([]);
   }
 
   let sql = "";
   let params = [];
 
-  /* ======================
-     DIRECTOR / HR_MANAGER
-     → ALL DATA
-  ====================== */
   if (["DIRECTOR","HR_MANAGER"].includes(roleUpper)) {
 
     sql = `
@@ -641,53 +633,43 @@ app.get("/getDepartmentData", (req, res) => {
       ORDER BY date DESC
     `;
   }
-
-  /* ======================
-     ADMIN / HR / TEAM_LEAD
-     → FULL DEPARTMENT DATA
-  ====================== */
   else if (["ADMIN","HR","TEAM_LEAD"].includes(roleUpper)) {
 
     sql = `
       SELECT *
       FROM ${tableName}
-      WHERE TRIM(department) = ?
+      WHERE department = ?
       ORDER BY date DESC
     `;
 
     params = [dept];
   }
-
-  /* ======================
-     EMPLOYEE / INTERN
-     → ONLY OWN DATA
-  ====================== */
   else {
 
     sql = `
       SELECT *
       FROM ${tableName}
       WHERE user_mail = ?
-        AND TRIM(department) = ?
+        AND department = ?
       ORDER BY date DESC
     `;
 
     params = [userMail, dept];
   }
 
-db.query(sql, params, (err, rows) => {
+  db.query(sql, params, (err, rows) => {
 
-  if (err) {
-    console.error("❌ Common Dashboard Error:", err.message);
-    return res.json([]);
-  }
+    if (err) {
+      console.error("❌ Common Dashboard Error:", err.message);
+      return res.json([]);
+    }
 
-  res.json(rows);
+    console.log("DATA COUNT:", rows.length); // debug
+
+    res.json(rows);
   });
 
-
 });
-
 
 /* ======================
    UPDATE MEDIA MONITORING DATA
