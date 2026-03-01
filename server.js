@@ -12,7 +12,7 @@ const upload = multer();
    Middleware
 ====================== */
 app.use(cors({
-  origin: "https://pixeltruth.com",
+  origin: true,
   credentials: true
 }));
 
@@ -719,11 +719,6 @@ app.get("/getMediaMonitoringData", (req, res) => {
   let sql = "";
   let params = [];
 
-  /* ======================
-     ADMIN / HR / TL / DIRECTOR
-     → Full department data
-  ====================== */
-  if (["ADMIN","HR","TEAM_LEAD","DIRECTOR","HR_MANAGER"].includes(roleUpper)) {
 
     sql = `
       SELECT *
