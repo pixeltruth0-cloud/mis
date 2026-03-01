@@ -587,12 +587,7 @@ app.post("/submitMediaMonitoring", upload.none(), (req, res) => {
   });
 
 });
-/* ======================
-   DASHBOARD DATA (ROLE BASED - QUERY)
-====================== */
-/* ======================
-   SOCIAL MEDIA AUDIT DASHBOARD (ROLE BASED)
-====================== */
+
 /* ======================
    COMMON DASHBOARD (ALL DEPARTMENTS)
 ====================== */
@@ -688,8 +683,7 @@ app.get("/getDepartmentData", (req, res) => {
     }
 
     res.json({
-      success:true,
-      data:rows
+      data:rows;
     });
 
   });
