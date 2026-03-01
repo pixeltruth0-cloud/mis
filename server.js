@@ -712,30 +712,50 @@ app.get("/getMediaMonitoringData", (req, res) => {
     return res.json({ success: false, data: [] });
   }
 
-  const roleUpper = role.trim().toUpperCase();
+  const roleUpper = role.trim().toUpperCase().replace(/\s+/g, "_");
   const dept = department.trim();
   const userMail = user_mail.trim();
 
   let sql = "";
   let params = [];
 
+  /* ===========================
+     DIRECTOR / HR_MANAGER
+     → ALL DEPARTMENTS DATA
+  ============================ */
+  if (["DIRECTOR", "HR_MANAGER"].includes(roleUpper)) {
+
+    sql = `
+      SELECT *
+      FROM media_monitoring_data
+      ORDER BY date DESC, insert_id DESC
+      LIMIT 500
+    `;
+
+    params = [];
+  }
+
+  /* ===========================
+     ADMIN / HR / TEAM_LEAD
+     → FULL DEPARTMENT DATA
+  ============================ */
+  else if (["ADMIN", "HR", "TEAM_LEAD"].includes(roleUpper)) {
 
     sql = `
       SELECT *
       FROM media_monitoring_data
       WHERE TRIM(department) = ?
       ORDER BY date DESC, insert_id DESC
-      LIMIT 200
+      LIMIT 500
     `;
 
     params = [dept];
-
   }
 
-  /* ======================
+  /* ===========================
      EMPLOYEE / INTERN
-     → Only own data
-  ====================== */
+     → ONLY OWN DATA
+  ============================ */
   else {
 
     sql = `
@@ -748,7 +768,6 @@ app.get("/getMediaMonitoringData", (req, res) => {
     `;
 
     params = [userMail, dept];
-
   }
 
   db.query(sql, params, (err, rows) => {
@@ -758,7 +777,6 @@ app.get("/getMediaMonitoringData", (req, res) => {
       return res.json({ success: false, data: [] });
     }
 
-    // safety fallback
     rows.forEach(r => {
       if (!r.date && r.created_at) {
         r.date = r.created_at;
@@ -772,7 +790,7 @@ app.get("/getMediaMonitoringData", (req, res) => {
 
   });
 
-});
+});;
 
 /* ======================
    DELETE MEDIA MONITORING DATA
