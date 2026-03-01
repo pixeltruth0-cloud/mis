@@ -869,6 +869,65 @@ app.post("/updateMediaMonitoringData", (req, res) => {
   });
 
 });
+
+/* ======================
+   COMMON APPROVAL UPDATE (ALL DEPARTMENTS)
+====================== */
+app.post("/updateApprovalStatus", (req, res) => {
+
+  if (!db) return res.json({ success:false });
+
+  if (!req.session.user) {
+    return res.status(401).json({ success:false });
+  }
+
+  const role = req.session.user.Role;
+
+  // 🔒 Only admin roles allowed
+  if (!["Admin","HR","Team_Lead","Director","HR Manager"].includes(role)) {
+    return res.status(403).json({
+      success:false,
+      message:"Unauthorized"
+    });
+  }
+
+  const { id, status, department } = req.body;
+
+  if (!id || !status || !department) {
+    return res.json({ success:false });
+  }
+
+  let tableName = "";
+
+  if (department === "Media_Monitoring") {
+    tableName = "media_monitoring_data";
+  }
+  else if (department === "Social_Media_N_Website_Audit") {
+    tableName = "social_media_n_website_audit_data";
+  }
+  else if (department === "Brand_Infringement") {
+    tableName = "brand_infringement";
+  }
+  else {
+    return res.json({ success:false, message:"Invalid department" });
+  }
+
+  const sql = `
+    UPDATE ${tableName}
+    SET approval_status = ?
+    WHERE insert_id = ?
+  `;
+
+  db.query(sql, [status, id], (err) => {
+    if (err) {
+      console.error("Approval update error:", err.message);
+      return res.json({ success:false });
+    }
+
+    res.json({ success:true });
+  });
+
+});
 app.get("/getUsersByDepartment", (req, res) => {
   if (!db) return res.json([]);
 
