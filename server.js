@@ -700,22 +700,20 @@ app.get("/getBrandInfringementData", (req, res) => {
 /* ======================
    MEDIA MONITORING DASHBOARD (UPDATED)
 ====================== */
-/* ======================
-   MEDIA MONITORING DASHBOARD (ROLE BASED - FINAL)
-====================== */
+
 app.get("/getMediaMonitoringData", (req, res) => {
 
   if (!db) {
     return res.json({ success: false, data: [] });
   }
 
-  // 🔐 Session Security
-  if (!req.session.user) {
-    return res.status(401).json({
-      success: false,
-      message: "Not logged in"
-    });
-  }
+  // 🔥 TEMP: Session check remove if cross-domain issue
+  // if (!req.session.user) {
+  //   return res.status(401).json({
+  //     success: false,
+  //     message: "Not logged in"
+  //   });
+  // }
 
   const { user_mail, role, department } = req.query;
 
@@ -742,7 +740,6 @@ app.get("/getMediaMonitoringData", (req, res) => {
       ORDER BY date DESC, insert_id DESC
     `;
 
-    params = [];
   }
 
   /* ===========================
@@ -762,46 +759,20 @@ app.get("/getMediaMonitoringData", (req, res) => {
   }
 
   /* ===========================
-     EMPLOYEE
+     ALL OTHER ROLES
      → ONLY OWN DATA
-  ============================ */
-  else if (roleUpper === "EMPLOYEE") {
-
-    sql = `
-      SELECT *
-      FROM media_monitoring_data
-      WHERE user_mail = ?
-      ORDER BY date DESC, insert_id DESC
-    `;
-
-    params = [userMail];
-  }
-
-  /* ===========================
-     INTERN
-     → ONLY OWN DATA
-  ============================ */
-  else if (roleUpper === "INTERN") {
-
-    sql = `
-      SELECT *
-      FROM media_monitoring_data
-      WHERE user_mail = ?
-      ORDER BY date DESC, insert_id DESC
-    `;
-
-    params = [userMail];
-  }
-
-  /* ===========================
-     ANY OTHER ROLE
-     → BLOCK ACCESS
   ============================ */
   else {
-    return res.status(403).json({
-      success: false,
-      message: "Unauthorized role"
-    });
+
+    sql = `
+      SELECT *
+      FROM media_monitoring_data
+      WHERE user_mail = ?
+        AND TRIM(department) = ?
+      ORDER BY date DESC, insert_id DESC
+    `;
+
+    params = [userMail, dept];
   }
 
   db.query(sql, params, (err, rows) => {
