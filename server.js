@@ -793,19 +793,21 @@ app.get("/getUsersByDepartment", (req, res) => {
   const dept = department.trim();
 
   const sql = `
-    SELECT 
+    SELECT DISTINCT
       u.User_Name,
-      u.User_Mail,
-      d.department
+      u.User_Mail
     FROM mis_user_data u
-    INNER JOIN user_departments d
+    LEFT JOIN user_departments d
       ON u.User_Mail = d.user_mail
-    WHERE TRIM(d.department) = ?
-      AND u.is_archived = 0
+    WHERE u.is_archived = 0
       AND TRIM(u.Role) NOT IN ('HR','Admin','Director','HR Manager')
+      AND (
+        TRIM(u.Department) = ?
+        OR TRIM(d.department) = ?
+      )
   `;
 
-  db.query(sql, [dept], (err, rows) => {
+  db.query(sql, [dept, dept], (err, rows) => {
     if (err) {
       console.error("❌ getUsersByDepartment error:", err.message);
       return res.json([]);
