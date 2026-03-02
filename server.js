@@ -408,7 +408,7 @@ Object.keys(rawData).forEach(key => {
 
       "Stationary_Brand","Stationary_Project","Stationary_Count","Stationary_hours","Stationary_minutes","Stationary_Remark",
 
-      "Real_estimated_Brand","Real_estimated_Categories","Real_estimated_Count","Real_estimated_hours","Real_estimated_minutes","Real_estimated_Remark",
+      "Real_Estate_Brand","Real_Estate_Categories","Real_Estate_Count","Real_Estate_hours","Real_Estate_minutes","Real_Estate_Remark",
 
       "Incent_Brand","Incent_Count","Incent_Eastat_hours","Incent_Eastat_minutes","Incent_Remark",
 
@@ -866,7 +866,7 @@ app.post("/assignTask", (req, res) => {
     task_title,
     task_description,
     due_date,
-    estimated_hours,
+    Estate_hours,
     priority,
     department,
     assigned_by
@@ -894,7 +894,7 @@ app.post("/assignTask", (req, res) => {
       task_title,
       task_description,
       due_date,
-      estimated_hours,
+      Estate_hours,
       priority,
       assigned_by,
       assigned_at
@@ -913,7 +913,7 @@ app.post("/assignTask", (req, res) => {
       task_title,
       task_description || "",
       due_date,
-      estimated_hours || 0,
+      Estate_hours || 0,
       priority,
       assigned_by
     ];
@@ -981,7 +981,7 @@ app.post("/updateTask", (req, res) => {
     task_title,
     task_description,
     due_date,
-    estimated_hours,
+    Estate_hours,
     department
   } = req.body;
 
@@ -1001,7 +1001,7 @@ app.post("/updateTask", (req, res) => {
       task_title = ?,
       task_description = ?,
       due_date = ?,
-      estimated_hours = ?
+      Estate_hours = ?
     WHERE id = ?
   `;
 
@@ -1011,7 +1011,7 @@ app.post("/updateTask", (req, res) => {
     task_title,
     task_description || "",
     due_date,
-    estimated_hours || 0,
+    Estate_hours || 0,
     task_id
   ];
 
@@ -1091,9 +1091,9 @@ app.post("/updateDepartmentData", (req, res) => {
     "hours",
     "minutes",
     "remarks",
-    "real_estimated_hours",
-    "real_estimated_minutes",
-    "real_estimated_remarks",
+    "real_Estate_hours",
+    "real_Estate_minutes",
+    "real_Estate_remarks",
     "impact_brand",
     "impact_count",
     "impact_hours",
@@ -1148,7 +1148,7 @@ app.get("/getAssignedTasks", (req, res) => {
       task_title,
       task_description,
       due_date,
-      estimated_hours,
+      Estate_hours,
       priority,
       assigned_by,
       task_status,
@@ -1314,7 +1314,7 @@ app.get("/getMyTasks", (req, res) => {
       task_title,
       task_description,
       due_date,
-      estimated_hours,
+      Estate_hours,
       priority,          -- ✅ PRIORITY INCLUDED
       assigned_by,
       task_status,
