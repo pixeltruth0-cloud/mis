@@ -412,7 +412,18 @@ Object.keys(rawData).forEach(key => {
 
       "Incent_Brand","Incent_Count","Incent_Eastat_hours","Incent_Eastat_minutes","Incent_Remark",
 
-      "ITC_Cigarette_Platform","ITC_Cigarette_Count","ITC_Cigarette_hours","ITC_Cigarette_minutes","ITC_Cigarette_Remark"
+      "ITC_Cigarette_Platform","ITC_Cigarette_Count","ITC_Cigarette_hours","ITC_Cigarette_minutes","ITC_Cigarette_Remark",
+       "Nicotine_Platform",
+"Nicotine_Count",
+"Nicotine_hours",
+"Nicotine_minutes",
+"Nicotine_Remark",
+
+"Shopee_Platform",
+"Shopee_Count",
+"Shopee_hours",
+"Shopee_minutes",
+"Shopee_Remark"
     ];
 
     const values = allowedColumns.map(col => {
