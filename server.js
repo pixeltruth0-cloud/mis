@@ -1045,7 +1045,111 @@ app.post("/deleteTask", (req, res) => {
     res.json({ success: true });
   });
 });
+/* ======================
+   SMART BULK UPLOAD (AUTO TABLE SELECT)
+====================== */
 
+app.post("/bulkUpload", upload.single("file"), (req, res) => {
+
+  if (!db) {
+    return res.json({ success:false, message:"DB not connected" });
+  }
+
+  if (!req.file) {
+    return res.json({ success:false, message:"No file uploaded" });
+  }
+
+  const csv = require("csv-parser");
+  const stream = require("stream");
+
+  const results = [];
+  const bufferStream = new stream.PassThrough();
+  bufferStream.end(req.file.buffer);
+
+  bufferStream
+    .pipe(csv())
+    .on("data", (data) => {
+      results.push(data);
+    })
+    .on("end", () => {
+
+      if (!results.length) {
+        return res.json({ success:false, message:"Empty file" });
+      }
+
+      let processed = 0;
+      let hasError = false;
+
+      results.forEach(row => {
+
+        const department = row.department;
+
+        if (!department) {
+          hasError = true;
+          processed++;
+          return;
+        }
+
+        /* ======================
+           AUTO TABLE MAPPING
+        ======================= */
+
+        let tableName = "";
+
+        if (department === "Social_Media_N_Website_Audit") {
+          tableName = "social_media_n_website_audit_data";
+        }
+        else if (department === "Media_Monitoring") {
+          tableName = "media_monitoring_data";
+        }
+        else if (department === "Brand_Infringement") {
+          tableName = "brand_infringement";
+        }
+        else {
+          hasError = true;
+          processed++;
+          return;
+        }
+
+        const columns = Object.keys(row);
+        const values = Object.values(row);
+
+        const insertSql = `
+          INSERT INTO ${tableName}
+          (${columns.join(",")})
+          VALUES (${columns.map(() => "?").join(",")})
+        `;
+
+        db.query(insertSql, values, (err) => {
+
+          if (err) {
+            console.error("❌ Bulk insert error:", err.message);
+            hasError = true;
+          }
+
+          processed++;
+
+          if (processed === results.length) {
+            if (hasError) {
+              return res.json({
+                success:false,
+                message:"Some rows failed"
+              });
+            }
+
+            return res.json({
+              success:true,
+              message:`${results.length} rows uploaded successfully`
+            });
+          }
+
+        });
+
+      });
+
+    });
+
+});
 /* ======================
    DELETE DEPARTMENT DATA
 ====================== */
