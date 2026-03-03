@@ -4,6 +4,7 @@ const mysql = require("mysql2");
 const cors = require("cors");
 const multer = require("multer");
 
+
 const app = express();
 const upload = multer();
 ;
@@ -350,7 +351,7 @@ Object.keys(rawData).forEach(key => {
     return res.json({ success: false, message: "Missing required fields" });
   }
 
-  const MAX_MINUTES = 8 * 60 + 20;
+  const MAX_MINUTES = 14 * 60 + 20;
 
   const fetchSql = `
     SELECT *
