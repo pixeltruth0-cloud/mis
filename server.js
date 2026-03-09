@@ -1739,7 +1739,6 @@ app.get("/getSummary", (req, res) => {
 /* ======================
    EMPLOYEE WORK SUMMARY
 ====================== */
-
 app.get("/getEmployeeWorkSummary", (req, res) => {
 
   if (!db) return res.json([]);
@@ -1749,6 +1748,7 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
   let sql = `
     SELECT
       COALESCE(user_name,user_mail) AS user_name,
+      user_mail,
       department,
       SUM(actual_hours) AS hours
     FROM all_tasks_view
@@ -1767,7 +1767,7 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
     params.push(from_date, to_date);
   }
 
-  sql += " GROUP BY user_name, department";
+  sql += " GROUP BY user_name, user_mail, department";
 
   db.query(sql, params, (err, rows) => {
 
