@@ -1740,6 +1740,10 @@ app.get("/getSummary", (req, res) => {
    EMPLOYEE WORK SUMMARY
 ====================== */
 
+/* ======================
+   EMPLOYEE WORK SUMMARY
+====================== */
+
 app.get("/getEmployeeWorkSummary", (req, res) => {
 
   if (!db) return res.json([]);
@@ -1749,9 +1753,8 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
   let sql = `
     SELECT
       user_name,
-      department AS dept_name,
-      SUM(actual_hours) AS department_hours,
-      SUM(actual_hours) AS total_hours
+      department,
+      SUM(actual_hours) AS hours
     FROM all_tasks_view
     WHERE 1=1
   `;
@@ -1759,27 +1762,24 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
   let params = [];
 
   /* employee filter */
-
   if (employee) {
-    sql += " AND user_name LIKE ? ";
+    sql += " AND user_name LIKE ?";
     params.push(`%${employee}%`);
   }
 
   /* date filter */
-
   if (from_date && to_date) {
-    sql += " AND DATE(assigned_at) BETWEEN ? AND ? ";
+    sql += " AND DATE(assigned_at) BETWEEN ? AND ?";
     params.push(from_date, to_date);
   }
 
   /* department filter */
-
   if (department) {
-    sql += " AND department = ? ";
+    sql += " AND department = ?";
     params.push(department);
   }
 
-  sql += " GROUP BY user_name, department ORDER BY total_hours DESC";
+  sql += " GROUP BY user_name, department";
 
   db.query(sql, params, (err, rows) => {
 
@@ -1787,8 +1787,6 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
       console.error("❌ Work summary error:", err.message);
       return res.json([]);
     }
-
-    /* convert to frontend format */
 
     const result = {};
 
@@ -1798,18 +1796,18 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
 
         result[r.user_name] = {
           user_name: r.user_name,
-          dept_name: r.dept_name,
-          department_hours: r.department_hours,
+          dept_name: r.department,
+          department_hours: r.hours,
           other_dept_name: "",
           other_hours: 0,
-          total_hours: r.total_hours
+          total_hours: r.hours
         };
 
       } else {
 
-        result[r.user_name].other_dept_name = r.dept_name;
-        result[r.user_name].other_hours = r.department_hours;
-        result[r.user_name].total_hours += r.department_hours;
+        result[r.user_name].other_dept_name = r.department;
+        result[r.user_name].other_hours += r.hours;
+        result[r.user_name].total_hours += r.hours;
 
       }
 
