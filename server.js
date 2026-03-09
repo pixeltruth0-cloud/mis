@@ -1739,10 +1739,6 @@ app.get("/getSummary", (req, res) => {
 /* ======================
    EMPLOYEE WORK SUMMARY
 ====================== */
-/* ======================
-   EMPLOYEE WORK SUMMARY
-====================== */
-
 app.get("/getEmployeeWorkSummary", (req, res) => {
 
   if (!db) return res.json([]);
@@ -1751,40 +1747,29 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
 
   let sql = `
     SELECT
-      t.user_name,
-      t.user_mail,
-      t.department,
-      u.Department AS main_department,
-      SUM(t.actual_hours) AS hours
-    FROM all_tasks_view t
-    LEFT JOIN mis_user_data u
-      ON t.user_mail = u.User_Mail
+      work_date,
+      COALESCE(user_name,user_mail) AS user_name,
+      department,
+      SUM(actual_hours) AS hours
+    FROM all_tasks_view
     WHERE 1=1
   `;
 
   let params = [];
 
-  /* employee filter */
-
   if (employee) {
-    sql += " AND t.user_name LIKE ?";
+    sql += " AND user_name LIKE ?";
     params.push(`%${employee}%`);
   }
 
-  /* date filter */
-
   if (from_date && to_date) {
-    sql += " AND t.work_date BETWEEN ? AND ?";
+    sql += " AND work_date BETWEEN ? AND ?";
     params.push(from_date, to_date);
   }
 
   sql += `
-    GROUP BY
-      t.user_name,
-      t.user_mail,
-      t.department,
-      u.Department
-    ORDER BY t.user_name
+    GROUP BY work_date, user_name, department
+    ORDER BY work_date DESC
   `;
 
   db.query(sql, params, (err, rows) => {
@@ -1794,54 +1779,7 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
       return res.json([]);
     }
 
-    const result = {};
-
-    rows.forEach(r => {
-
-      const key = r.user_name;
-
-      if (!result[key]) {
-
-        result[key] = {
-          user_name: r.user_name,
-          dept_name: r.main_department,
-          department_hours: 0,
-          other_dept_name: "",
-          other_hours: 0,
-          total_hours: 0
-        };
-
-      }
-
-      const hours = Number(r.hours);
-
-      result[key].total_hours += hours;
-
-      /* main department work */
-
-      if (r.department === r.main_department) {
-
-        result[key].department_hours += hours;
-
-      }
-
-      /* other department work */
-
-      else {
-
-        if (result[key].other_dept_name) {
-          result[key].other_dept_name += ", " + r.department;
-        } else {
-          result[key].other_dept_name = r.department;
-        }
-
-        result[key].other_hours += hours;
-
-      }
-
-    });
-
-    res.json(Object.values(result));
+    res.json(rows);
 
   });
 
