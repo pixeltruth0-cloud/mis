@@ -1737,6 +1737,90 @@ app.get("/getSummary", (req, res) => {
 
 });
 /* ======================
+   EMPLOYEE WORK SUMMARY
+====================== */
+
+app.get("/getEmployeeWorkSummary", (req, res) => {
+
+  if (!db) return res.json([]);
+
+  const { employee, from_date, to_date, department } = req.query;
+
+  let sql = `
+    SELECT
+      user_name,
+      department AS dept_name,
+      SUM(actual_hours) AS department_hours,
+      SUM(actual_hours) AS total_hours
+    FROM all_tasks_view
+    WHERE 1=1
+  `;
+
+  let params = [];
+
+  /* employee filter */
+
+  if (employee) {
+    sql += " AND user_name LIKE ? ";
+    params.push(`%${employee}%`);
+  }
+
+  /* date filter */
+
+  if (from_date && to_date) {
+    sql += " AND DATE(assigned_at) BETWEEN ? AND ? ";
+    params.push(from_date, to_date);
+  }
+
+  /* department filter */
+
+  if (department) {
+    sql += " AND department = ? ";
+    params.push(department);
+  }
+
+  sql += " GROUP BY user_name, department ORDER BY total_hours DESC";
+
+  db.query(sql, params, (err, rows) => {
+
+    if (err) {
+      console.error("❌ Work summary error:", err.message);
+      return res.json([]);
+    }
+
+    /* convert to frontend format */
+
+    const result = {};
+
+    rows.forEach(r => {
+
+      if (!result[r.user_name]) {
+
+        result[r.user_name] = {
+          user_name: r.user_name,
+          dept_name: r.dept_name,
+          department_hours: r.department_hours,
+          other_dept_name: "",
+          other_hours: 0,
+          total_hours: r.total_hours
+        };
+
+      } else {
+
+        result[r.user_name].other_dept_name = r.dept_name;
+        result[r.user_name].other_hours = r.department_hours;
+        result[r.user_name].total_hours += r.department_hours;
+
+      }
+
+    });
+
+    res.json(Object.values(result));
+
+  });
+
+});
+/* ======================
    Server Start
 ====================== */
 const PORT = process.env.PORT || 3000;
