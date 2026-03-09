@@ -1740,10 +1740,6 @@ app.get("/getSummary", (req, res) => {
    EMPLOYEE WORK SUMMARY
 ====================== */
 
-/* ======================
-   EMPLOYEE WORK SUMMARY
-====================== */
-
 app.get("/getEmployeeWorkSummary", (req, res) => {
 
   if (!db) return res.json([]);
@@ -1762,24 +1758,27 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
   let params = [];
 
   /* employee filter */
+
   if (employee) {
     sql += " AND user_name LIKE ?";
     params.push(`%${employee}%`);
   }
 
   /* date filter */
+
   if (from_date && to_date) {
-    sql += " AND DATE(assigned_at) BETWEEN ? AND ?";
+    sql += " AND DATE(work_date) BETWEEN ? AND ?";
     params.push(from_date, to_date);
   }
 
   /* department filter */
+
   if (department) {
     sql += " AND department = ?";
     params.push(department);
   }
 
-  sql += " GROUP BY user_name, department";
+  sql += " GROUP BY user_name, department ORDER BY user_name";
 
   db.query(sql, params, (err, rows) => {
 
@@ -1797,17 +1796,20 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
         result[r.user_name] = {
           user_name: r.user_name,
           dept_name: r.department,
-          department_hours: r.hours,
+          department_hours: Number(r.hours),
           other_dept_name: "",
           other_hours: 0,
-          total_hours: r.hours
+          total_hours: Number(r.hours)
         };
 
       } else {
 
-        result[r.user_name].other_dept_name = r.department;
-        result[r.user_name].other_hours += r.hours;
-        result[r.user_name].total_hours += r.hours;
+        result[r.user_name].other_dept_name +=
+          (result[r.user_name].other_dept_name ? ", " : "") + r.department;
+
+        result[r.user_name].other_hours += Number(r.hours);
+
+        result[r.user_name].total_hours += Number(r.hours);
 
       }
 
