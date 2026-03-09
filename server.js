@@ -1747,27 +1747,30 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
 
   let sql = `
     SELECT
-      COALESCE(user_name,user_mail) AS user_name,
-      user_mail,
-      department,
-      SUM(actual_hours) AS hours
-    FROM all_tasks_view
+      COALESCE(t.user_name, t.user_mail) AS user_name,
+      t.user_mail,
+      t.department,
+      SUM(t.actual_hours) AS hours
+    FROM all_tasks_view t
     WHERE 1=1
   `;
 
   let params = [];
 
   if (employee) {
-    sql += " AND user_name LIKE ?";
+    sql += " AND t.user_name LIKE ?";
     params.push(`%${employee}%`);
   }
 
   if (from_date && to_date) {
-    sql += " AND work_date BETWEEN ? AND ?";
+    sql += " AND t.work_date BETWEEN ? AND ?";
     params.push(from_date, to_date);
   }
 
-  sql += " GROUP BY user_name, user_mail, department";
+  sql += `
+    GROUP BY t.user_name, t.user_mail, t.department
+    ORDER BY t.user_name
+  `;
 
   db.query(sql, params, (err, rows) => {
 
@@ -1793,12 +1796,14 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
         };
       }
 
-      result[key].total_hours += Number(r.hours);
+      const hours = Number(r.hours);
+
+      result[key].total_hours += hours;
 
       if (department && r.department === department) {
 
         result[key].dept_name = r.department;
-        result[key].department_hours += Number(r.hours);
+        result[key].department_hours += hours;
 
       } else {
 
@@ -1808,7 +1813,8 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
           result[key].other_dept_name = r.department;
         }
 
-        result[key].other_hours += Number(r.hours);
+        result[key].other_hours += hours;
+
       }
 
     });
