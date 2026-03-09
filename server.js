@@ -1748,32 +1748,30 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
   let sql = `
     SELECT
       work_date,
-      COALESCE(user_name, user_mail) AS user_name,
+      user_name,
       department,
       SUM(actual_hours) AS hours
     FROM all_tasks_view
-    WHERE 1=1
+    WHERE actual_hours > 0
   `;
 
   let params = [];
 
+  /* employee filter */
   if (employee) {
     sql += " AND user_name LIKE ?";
     params.push(`%${employee}%`);
   }
 
+  /* date filter */
   if (from_date && to_date) {
     sql += " AND work_date BETWEEN ? AND ?";
     params.push(from_date, to_date);
   }
 
   sql += `
-    GROUP BY
-      work_date,
-      user_name,
-      department
-    ORDER BY
-      work_date DESC
+    GROUP BY work_date, user_name, department
+    ORDER BY work_date DESC
   `;
 
   db.query(sql, params, (err, rows) => {
