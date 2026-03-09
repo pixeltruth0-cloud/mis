@@ -1748,7 +1748,7 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
   let sql = `
     SELECT
       work_date,
-      COALESCE(user_name,user_mail) AS user_name,
+      COALESCE(user_name, user_mail) AS user_name,
       department,
       SUM(actual_hours) AS hours
     FROM all_tasks_view
@@ -1768,8 +1768,12 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
   }
 
   sql += `
-    GROUP BY work_date, user_name, department
-    ORDER BY work_date DESC
+    GROUP BY
+      work_date,
+      user_name,
+      department
+    ORDER BY
+      work_date DESC
   `;
 
   db.query(sql, params, (err, rows) => {
