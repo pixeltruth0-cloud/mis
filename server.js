@@ -1750,7 +1750,6 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
     SELECT
       COALESCE(user_name,user_mail) AS user_name,
       department,
-      work_date,
       SUM(actual_hours) AS hours
     FROM all_tasks_view
     WHERE 1=1
@@ -1758,21 +1757,17 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
 
   let params = [];
 
-  /* employee filter */
-
   if (employee) {
     sql += " AND user_name LIKE ?";
     params.push(`%${employee}%`);
   }
-
-  /* date filter */
 
   if (from_date && to_date) {
     sql += " AND work_date BETWEEN ? AND ?";
     params.push(from_date, to_date);
   }
 
-  sql += " GROUP BY user_name, department, work_date ORDER BY work_date DESC";
+  sql += " GROUP BY user_name, department";
 
   db.query(sql, params, (err, rows) => {
 
@@ -1785,12 +1780,11 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
 
     rows.forEach(r => {
 
-      const key = r.user_name + "_" + r.work_date;
+      const key = r.user_name;
 
       if (!result[key]) {
         result[key] = {
           user_name: r.user_name,
-          date: r.work_date,
           dept_name: "",
           department_hours: 0,
           other_dept_name: "",
@@ -1799,11 +1793,7 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
         };
       }
 
-      /* total hours */
-
       result[key].total_hours += Number(r.hours);
-
-      /* main department */
 
       if (department && r.department === department) {
 
