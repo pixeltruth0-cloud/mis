@@ -1739,85 +1739,51 @@ app.get("/getSummary", (req, res) => {
 /* ======================
    EMPLOYEE WORK SUMMARY
 ====================== */
-
 app.get("/getEmployeeWorkSummary", (req, res) => {
 
-  if (!db) return res.json([]);
+if (!db) return res.json([]);
 
-  const { employee, from_date, to_date, department } = req.query;
+const { employee, from_date, to_date, department } = req.query;
 
-  let sql = `
-    SELECT
-      user_name,
-      department,
-      SUM(actual_hours) AS hours
-    FROM all_tasks_view
-    WHERE 1=1
-  `;
+let sql = `
+SELECT
+COALESCE(user_name,user_mail) AS user_name,
+department,
+work_date,
+SUM(actual_hours) AS hours
+FROM all_tasks_view
+WHERE 1=1
+`;
 
-  let params = [];
+let params=[];
 
-  /* employee filter */
+if(employee){
+sql+=" AND user_name LIKE ?";
+params.push(`%${employee}%`);
+}
 
-  if (employee) {
-    sql += " AND user_name LIKE ?";
-    params.push(`%${employee}%`);
-  }
+if(from_date && to_date){
+sql+=" AND work_date BETWEEN ? AND ?";
+params.push(from_date,to_date);
+}
 
-  /* date filter */
+if(department){
+sql+=" AND department=?";
+params.push(department);
+}
 
-  if (from_date && to_date) {
-    sql += " AND DATE(work_date) BETWEEN ? AND ?";
-    params.push(from_date, to_date);
-  }
+sql+=" GROUP BY user_name,department,work_date ORDER BY work_date DESC";
 
-  /* department filter */
+db.query(sql,params,(err,rows)=>{
 
-  if (department) {
-    sql += " AND department = ?";
-    params.push(department);
-  }
+if(err){
+console.error("❌ Work summary error:",err.message);
+return res.json([]);
+}
 
-  sql += " GROUP BY user_name, department ORDER BY user_name";
+res.json(rows);
 
-  db.query(sql, params, (err, rows) => {
-
-    if (err) {
-      console.error("❌ Work summary error:", err.message);
-      return res.json([]);
-    }
-
-    const result = {};
-
-    rows.forEach(r => {
-
-      if (!result[r.user_name]) {
-
-        result[r.user_name] = {
-          user_name: r.user_name,
-          dept_name: r.department,
-          department_hours: Number(r.hours),
-          other_dept_name: "",
-          other_hours: 0,
-          total_hours: Number(r.hours)
-        };
-
-      } else {
-
-        result[r.user_name].other_dept_name +=
-          (result[r.user_name].other_dept_name ? ", " : "") + r.department;
-
-        result[r.user_name].other_hours += Number(r.hours);
-
-        result[r.user_name].total_hours += Number(r.hours);
-
-      }
-
-    });
-
-    res.json(Object.values(result));
-
-  });
+});
 
 });
 /* ======================
