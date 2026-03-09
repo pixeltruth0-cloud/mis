@@ -1739,28 +1739,39 @@ app.get("/getSummary", (req, res) => {
 /* ======================
    EMPLOYEE WORK SUMMARY
 ====================== */
+/* ======================
+   EMPLOYEE WORK SUMMARY
+====================== */
+
 app.get("/getEmployeeWorkSummary", (req, res) => {
 
   if (!db) return res.json([]);
 
-  const { employee, from_date, to_date, department } = req.query;
+  const { employee, from_date, to_date } = req.query;
 
   let sql = `
     SELECT
-      COALESCE(t.user_name, t.user_mail) AS user_name,
+      t.user_name,
       t.user_mail,
       t.department,
+      u.Department AS main_department,
       SUM(t.actual_hours) AS hours
     FROM all_tasks_view t
+    LEFT JOIN mis_user_data u
+      ON t.user_mail = u.User_Mail
     WHERE 1=1
   `;
 
   let params = [];
 
+  /* employee filter */
+
   if (employee) {
     sql += " AND t.user_name LIKE ?";
     params.push(`%${employee}%`);
   }
+
+  /* date filter */
 
   if (from_date && to_date) {
     sql += " AND t.work_date BETWEEN ? AND ?";
@@ -1768,7 +1779,11 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
   }
 
   sql += `
-    GROUP BY t.user_name, t.user_mail, t.department
+    GROUP BY
+      t.user_name,
+      t.user_mail,
+      t.department,
+      u.Department
     ORDER BY t.user_name
   `;
 
@@ -1786,26 +1801,33 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
       const key = r.user_name;
 
       if (!result[key]) {
+
         result[key] = {
           user_name: r.user_name,
-          dept_name: "",
+          dept_name: r.main_department,
           department_hours: 0,
           other_dept_name: "",
           other_hours: 0,
           total_hours: 0
         };
+
       }
 
       const hours = Number(r.hours);
 
       result[key].total_hours += hours;
 
-      if (department && r.department === department) {
+      /* main department work */
 
-        result[key].dept_name = r.department;
+      if (r.department === r.main_department) {
+
         result[key].department_hours += hours;
 
-      } else {
+      }
+
+      /* other department work */
+
+      else {
 
         if (result[key].other_dept_name) {
           result[key].other_dept_name += ", " + r.department;
