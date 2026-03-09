@@ -1739,51 +1739,93 @@ app.get("/getSummary", (req, res) => {
 /* ======================
    EMPLOYEE WORK SUMMARY
 ====================== */
+
 app.get("/getEmployeeWorkSummary", (req, res) => {
 
-if (!db) return res.json([]);
+  if (!db) return res.json([]);
 
-const { employee, from_date, to_date, department } = req.query;
+  const { employee, from_date, to_date, department } = req.query;
 
-let sql = `
-SELECT
-COALESCE(user_name,user_mail) AS user_name,
-department,
-work_date,
-SUM(actual_hours) AS hours
-FROM all_tasks_view
-WHERE 1=1
-`;
+  let sql = `
+    SELECT
+      COALESCE(user_name,user_mail) AS user_name,
+      department,
+      work_date,
+      SUM(actual_hours) AS hours
+    FROM all_tasks_view
+    WHERE 1=1
+  `;
 
-let params=[];
+  let params = [];
 
-if(employee){
-sql+=" AND user_name LIKE ?";
-params.push(`%${employee}%`);
-}
+  /* employee filter */
 
-if(from_date && to_date){
-sql+=" AND work_date BETWEEN ? AND ?";
-params.push(from_date,to_date);
-}
+  if (employee) {
+    sql += " AND user_name LIKE ?";
+    params.push(`%${employee}%`);
+  }
 
-if(department){
-sql+=" AND department=?";
-params.push(department);
-}
+  /* date filter */
 
-sql+=" GROUP BY user_name,department,work_date ORDER BY work_date DESC";
+  if (from_date && to_date) {
+    sql += " AND work_date BETWEEN ? AND ?";
+    params.push(from_date, to_date);
+  }
 
-db.query(sql,params,(err,rows)=>{
+  sql += " GROUP BY user_name, department, work_date ORDER BY work_date DESC";
 
-if(err){
-console.error("❌ Work summary error:",err.message);
-return res.json([]);
-}
+  db.query(sql, params, (err, rows) => {
 
-res.json(rows);
+    if (err) {
+      console.error("❌ Work summary error:", err.message);
+      return res.json([]);
+    }
 
-});
+    const result = {};
+
+    rows.forEach(r => {
+
+      const key = r.user_name + "_" + r.work_date;
+
+      if (!result[key]) {
+        result[key] = {
+          user_name: r.user_name,
+          date: r.work_date,
+          dept_name: "",
+          department_hours: 0,
+          other_dept_name: "",
+          other_hours: 0,
+          total_hours: 0
+        };
+      }
+
+      /* total hours */
+
+      result[key].total_hours += Number(r.hours);
+
+      /* main department */
+
+      if (department && r.department === department) {
+
+        result[key].dept_name = r.department;
+        result[key].department_hours += Number(r.hours);
+
+      } else {
+
+        if (result[key].other_dept_name) {
+          result[key].other_dept_name += ", " + r.department;
+        } else {
+          result[key].other_dept_name = r.department;
+        }
+
+        result[key].other_hours += Number(r.hours);
+      }
+
+    });
+
+    res.json(Object.values(result));
+
+  });
 
 });
 /* ======================
