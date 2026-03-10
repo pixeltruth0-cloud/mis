@@ -157,13 +157,16 @@ req.session.user = {
   Reporting_Person: user.Reporting_Person
 };
 
-/* ✅ Save session then respond */
 req.session.save(() => {
-  return res.json({
+
+  console.log("SESSION SAVED:", req.session.user);
+
+  res.json({
     success: true,
     redirectUrl,
     user: req.session.user
   });
+
 });
 /* ✅ Final Response */
 return res.json({
