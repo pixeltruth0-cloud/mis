@@ -720,7 +720,7 @@ app.get("/getDepartmentData", (req, res) => {
   }
 
   const roleUpper = role.trim().toUpperCase().replace(/\s+/g, "_");
-  const dept = department.trim();
+  const dept = department.trim().toLowerCase();
   const userMail = user_mail.trim();
 
   let tableName = "";
@@ -1251,27 +1251,43 @@ const values = columns.map(col => row[col]);
 ====================== */
 app.post("/deleteDepartmentData", (req, res) => {
 
-  if (!db) return res.json({ success: false });
+  if (!db) return res.json({ success:false });
 
-  const { id } = req.body;
+  const { id, department } = req.body;
 
-  if (!id) return res.json({ success: false });
+  if (!id || !department) {
+    return res.json({ success:false });
+  }
 
-  const sql = `
-    DELETE FROM social_media_n_website_audit_data
-    WHERE insert_id = ?
-  `;
+  let tableName = "";
 
-  db.query(sql, [id], (err) => {
+  if (department === "Social_Media_N_Website_Audit") {
+    tableName = "social_media_n_website_audit_data";
+  }
+  else if (department === "Media_Monitoring") {
+    tableName = "media_monitoring_data";
+  }
+  else if (department === "Brand_Infringement") {
+    tableName = "brand_infringement";
+  }
+  else {
+    return res.json({ success:false });
+  }
+
+  const sql = `DELETE FROM ${tableName} WHERE insert_id = ?`;
+
+  db.query(sql, [id], err => {
+
     if (err) {
-      console.error("❌ deleteDepartmentData error:", err.message);
-      return res.json({ success: false });
+      console.error("Delete error:", err.message);
+      return res.json({ success:false });
     }
 
-    res.json({ success: true });
-  });
-});
+    res.json({ success:true });
 
+  });
+
+});
 /* ======================
    UPDATE DEPARTMENT DATA
 ====================== */
