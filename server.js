@@ -166,25 +166,17 @@ req.session.save(() => {
    GET USER INFO (SESSION)
 ====================== */
 app.get("/getDepartmentUsers", (req, res) => {
-     console.log("SESSION:", req.session.user);
-
 
   if (!db) return res.json([]);
 
-  if (!req.session.user) {
-    return res.json([]);
-  }
-
-  const { Role, Department } = req.session.user;
+  const { department, role } = req.query;
 
   let sql = "";
   let params = [];
 
-  /* ==============================
-     DIRECTOR / HR MANAGER → ALL USERS
-  ============================== */
+  /* DIRECTOR / HR MANAGER → ALL USERS */
 
-  if (Role === "Director" || Role === "HR Manager") {
+  if (role === "Director" || role === "HR Manager") {
 
     sql = `
       SELECT 
@@ -203,11 +195,9 @@ app.get("/getDepartmentUsers", (req, res) => {
 
   }
 
-  /* ==============================
-     HR / ADMIN → ONLY THEIR DEPARTMENT
-  ============================== */
+  /* HR / ADMIN → ONLY THEIR DEPARTMENT */
 
-  else if (Role === "HR" || Role === "Admin") {
+  else if (role === "HR" || role === "Admin") {
 
     sql = `
       SELECT 
@@ -225,12 +215,9 @@ app.get("/getDepartmentUsers", (req, res) => {
       ORDER BY Employee_ID DESC
     `;
 
-    params = [Department];
-  }
+    params = [department];
 
-  /* ==============================
-     OTHER ROLES → NO ACCESS
-  ============================== */
+  }
 
   else {
     return res.json([]);
