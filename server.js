@@ -1259,15 +1259,17 @@ app.post("/deleteDepartmentData", (req, res) => {
     return res.json({ success:false });
   }
 
+  const dept = department.trim().toLowerCase();
+
   let tableName = "";
 
-  if (department === "Social_Media_N_Website_Audit") {
+  if (dept === "social_media_n_website_audit") {
     tableName = "social_media_n_website_audit_data";
   }
-  else if (department === "Media_Monitoring") {
+  else if (dept === "media_monitoring") {
     tableName = "media_monitoring_data";
   }
-  else if (department === "Brand_Infringement") {
+  else if (dept === "brand_infringement") {
     tableName = "brand_infringement";
   }
   else {
