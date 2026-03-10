@@ -791,23 +791,9 @@ app.post("/updateApprovalStatus", (req, res) => {
 
   if (!db) return res.json({ success:false });
 
-  if (!req.session.user) {
-    return res.status(401).json({ success:false });
-  }
+  const { id, status, department } = req.body;
 
-  const role = req.session.user.Role;
-
-  // 🔒 Only admin roles allowed
-  if (!["Admin","HR","Team_Lead","Director","HR Manager"].includes(role)) {
-    return res.status(403).json({
-      success:false,
-      message:"Unauthorized"
-    });
-  }
-
- const { insert_id, status } = req.body;
-
- if (!insert_id || !status){
+  if (!id || !status || !department) {
     return res.json({ success:false });
   }
 
@@ -823,7 +809,7 @@ app.post("/updateApprovalStatus", (req, res) => {
     tableName = "brand_infringement";
   }
   else {
-    return res.json({ success:false, message:"Invalid department" });
+    return res.json({ success:false });
   }
 
   const sql = `
@@ -832,17 +818,21 @@ app.post("/updateApprovalStatus", (req, res) => {
     WHERE insert_id = ?
   `;
 
-  db.query(sql, [status, insert_id], (err) => {
+  db.query(sql, [status, id], (err) => {
+
     if (err) {
       console.error("Approval update error:", err.message);
       return res.json({ success:false });
     }
 
-    res.json({ success:true });
+    res.json({
+      success:true,
+      message:"Status updated"
+    });
+
   });
 
 });
-
 /* ======================
    COMMON Task Assigment
 ====================== */
