@@ -221,7 +221,7 @@ app.get("/getDepartmentUsers", (req, res) => {
         Reporting_Person,
         is_archived
       FROM mis_user_data
-      WHERE TRIM(Department) = ?
+      WHERE LOWER(TRIM(Department)) = LOWER(?)
       ORDER BY Employee_ID DESC
     `;
 
@@ -940,7 +940,7 @@ app.get("/getUsersInDepartment", (req, res) => {
   const sql = `
     SELECT User_Name, User_Mail, Department
     FROM mis_user_data
-    WHERE TRIM(Department) = ?
+    WHERE LOWER(TRIM(Department)) = LOWER(?)
       AND is_archived = 0
   `;
 
