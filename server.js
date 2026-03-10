@@ -28,11 +28,11 @@ app.use(session({
   saveUninitialized: false,
   proxy: true,
   cookie: {
-    secure: true,
-    sameSite: "none",
-    httpOnly: true,
-    maxAge: 1000 * 60 * 60 * 24
-  }
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "none",
+  httpOnly: true,
+  maxAge: 1000 * 60 * 60 * 24
+}
 }));
 
  // simple CORS (no credentials)
@@ -120,14 +120,6 @@ app.post("/login", (req, res) => {
 
   }
 
-      // ✅ Session
-      req.session.user = {
-        User_Name: user.User_Name,
-        User_Mail: user.User_Mail,
-        Role: user.Role,
-        Department: Department,
-        Employee_ID: user.Employee_ID
-      };
 
    const BASE_URL = "https://pixeltruth.com/mis";
 let redirectUrl = "";
