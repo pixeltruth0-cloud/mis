@@ -166,30 +166,6 @@ req.session.save(() => {
     redirectUrl,
     user: req.session.user
   });
-
-});
-/* ✅ Session */
-req.session.user = {
-  User_Name: user.User_Name,
-  User_Mail: user.User_Mail,
-  Role: user.Role,
-  Department: Department,
-  Employee_ID: user.Employee_ID,
-  Designation: user.Designation,
-  Phone_Number: user.Phone_Number,
-  Reporting_Person: user.Reporting_Person
-};
-
-req.session.save(() => {
-
-  console.log("SESSION SAVED:", req.session.user);
-
-  res.json({
-    success: true,
-    redirectUrl,
-    user: req.session.user
-  });
-
 });
  });  // deptSql close
   });    // main query close
