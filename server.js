@@ -12,10 +12,7 @@ const upload = multer();
    Middleware
 ====================== */
 app.use(cors({
-  origin: [
-    "https://pixeltruth.com",
-    "https://www.pixeltruth.com"
-  ],
+  origin: true,
   credentials: true
 }));
 app.set("trust proxy", 1);
@@ -30,7 +27,7 @@ app.use(session({
   saveUninitialized: false,
   proxy: true,
   cookie: {
-  secure: process.env.NODE_ENV === "production",
+  secure: true,
   sameSite: "none",
   httpOnly: true,
   maxAge: 1000 * 60 * 60 * 24
