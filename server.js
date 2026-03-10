@@ -400,32 +400,83 @@ Object.keys(rawData).forEach(key => {
     }
 
     // 🔥 FIXED INSERT (STRICT ORDER MATCH)
-    const allowedColumns = [
-      "user_name","user_mail","department","date",
+const allowedColumns = [
 
-      "Website_Audit_Brand","Website_Audit_Type_Of_Task","Website_Audit_hours","Website_Audit_minutes","Website_Audit_Remark","Website_Audit_Status",
+"user_name",
+"user_mail",
+"department",
+"date",
+"rotation",
 
-      "Social_Media_Audit_Brand","Social_Media_Audit_Type_Of_Task","Social_Media_Audit_hours","Social_Media_Audit_minutes","Social_Media_Audit_Remark","Social_Media_Audit_Status",
+/* WEBSITE AUDIT */
+"Website_Audit_Type_Of_Work",
+"Website_Audit_Brand",
+"Website_Audit_Type_Of_Task",
+"Website_Audit_hours",
+"Website_Audit_minutes",
+"Website_Audit_Remark",
+"Website_Audit_Status",
 
-      "Stationary_Brand","Stationary_Project","Stationary_Count","Stationary_hours","Stationary_minutes","Stationary_Remark",
+/* SOCIAL MEDIA */
+"Social_Media_Audit_Type_Of_Work",
+"Social_Media_Audit_Brand",
+"Social_Media_Audit_Type_Of_Task",
+"Social_Media_Audit_hours",
+"Social_Media_Audit_minutes",
+"Social_Media_Audit_Remark",
+"Social_Media_Audit_Status",
 
-      "Real_Estate_Brand","Real_Estate_Categories","Real_Estate_Count","Real_Estate_hours","Real_Estate_minutes","Real_Estate_Remark",
+/* STATIONARY */
+"Stationary_Type_Of_Work",
+"Stationary_Brand",
+"Stationary_Project",
+"Stationary_Count",
+"Stationary_hours",
+"Stationary_minutes",
+"Stationary_Remark",
 
-      "Incent_Brand","Incent_Count","Incent_Eastat_hours","Incent_Eastat_minutes","Incent_Remark",
+/* REAL ESTATE */
+"Real_Estate_Type_Of_Work",
+"Real_Estate_Brand",
+"Real_Estate_Categories",
+"Real_Estate_Count",
+"Real_Estate_hours",
+"Real_Estate_minutes",
+"Real_Estate_Remark",
 
-      "ITC_Cigarette_Platform","ITC_Cigarette_Count","ITC_Cigarette_hours","ITC_Cigarette_minutes","ITC_Cigarette_Remark",
-       "Nicotine_Platform",
+/* INCENT */
+"Incent_Type_Of_Work",
+"Incent_Brand",
+"Incent_Count",
+"Incent_Eastat_hours",
+"Incent_Eastat_minutes",
+"Incent_Remark",
+
+/* ITC */
+"ITC_Cigarette_Type_Of_Work",
+"ITC_Cigarette_Platform",
+"ITC_Cigarette_Count",
+"ITC_Cigarette_hours",
+"ITC_Cigarette_minutes",
+"ITC_Cigarette_Remark",
+
+/* NICOTINE */
+"Nicotine_Type_Of_Work",
+"Nicotine_Platform",
 "Nicotine_Count",
 "Nicotine_hours",
 "Nicotine_minutes",
 "Nicotine_Remark",
 
+/* SHOPEE */
+"Shopee_Type_Of_Work",
 "Shopee_Platform",
 "Shopee_Count",
 "Shopee_hours",
 "Shopee_minutes",
 "Shopee_Remark"
-    ];
+
+];
 
     const values = allowedColumns.map(col => {
   if (col.endsWith("_hours") || col.endsWith("_minutes") || col.endsWith("_Count")) {
