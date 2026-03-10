@@ -1596,36 +1596,6 @@ app.get("/getMyTasks", (req, res) => {
 
 
 /* ======================
-   GET USERS (HR) – NON ARCHIVED ONLY
-====================== */
-app.get("/getDepartmentUsers", (req, res) => {
-  if (!db) return res.json([]);
-
-  const sql = `
-    SELECT 
-      Employee_ID,
-      User_Name,
-      User_Mail,
-      Designation,
-      Department,
-      Role,
-      Phone_Number,
-      Reporting_Person
-    FROM mis_user_data
-    WHERE is_archived = 0
-    ORDER BY Employee_ID DESC
-  `;
-
-  db.query(sql, (err, rows) => {
-    if (err) {
-      console.error("❌ getDepartmentUsers error:", err.message);
-      return res.json([]);
-    }
-    res.json(rows);
-  });
-});
-
-/* ======================
    SUPER ADMIN DASHBOARD DATA
 ====================== */
 /* ======================
