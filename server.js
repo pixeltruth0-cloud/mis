@@ -27,10 +27,10 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: isProduction,     // true only in production
-    sameSite: isProduction ? "none" : "lax",
-    maxAge: 1000 * 60 * 60 * 24
-  }
+  secure: true,
+  sameSite: "none",
+  maxAge: 1000 * 60 * 60 * 24
+}
 }));
 
  // simple CORS (no credentials)
@@ -178,6 +178,8 @@ return res.json({
    GET USER INFO (SESSION)
 ====================== */
 app.get("/getDepartmentUsers", (req, res) => {
+     console.log("SESSION:", req.session.user);
+
 
   if (!db) return res.json([]);
 
