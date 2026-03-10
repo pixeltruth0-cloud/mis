@@ -177,20 +177,40 @@ return res.json({
 /* ======================
    GET USER INFO (SESSION)
 ====================== */
-app.get("/getUserInfo", (req, res) => {
+app.get("/getDepartmentUsers", (req, res) => {
+
+  if (!db) return res.json([]);
 
   if (!req.session.user) {
-    return res.status(401).json({
-      success:false,
-      message:"Not logged in"
-    });
+    return res.json([]);
   }
 
-  res.json({
-    success:true,
-    user:req.session.user
-  });
+  const department = req.session.user.Department;
 
+  const sql = `
+    SELECT 
+      Employee_ID,
+      User_Name,
+      User_Mail,
+      Designation,
+      Department,
+      Role,
+      Phone_Number,
+      Reporting_Person,
+      is_archived
+    FROM mis_user_data
+    WHERE TRIM(Department) = ?
+    ORDER BY Employee_ID DESC
+  `;
+
+  db.query(sql, [department], (err, rows) => {
+    if (err) {
+      console.error("❌ getDepartmentUsers error:", err.message);
+      return res.json([]);
+    }
+
+    res.json(rows);
+  });
 });
 /* ======================
    ADD USER (HR) ✅ FIXED
