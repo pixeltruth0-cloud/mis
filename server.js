@@ -26,11 +26,13 @@ app.use(session({
   secret: "pixeltruth_secret_123",
   resave: false,
   saveUninitialized: false,
+  proxy: true,
   cookie: {
-  secure: true,
-  sameSite: "none",
-  maxAge: 1000 * 60 * 60 * 24
-}
+    secure: true,
+    sameSite: "none",
+    httpOnly: true,
+    maxAge: 1000 * 60 * 60 * 24
+  }
 }));
 
  // simple CORS (no credentials)
@@ -155,6 +157,14 @@ req.session.user = {
   Reporting_Person: user.Reporting_Person
 };
 
+/* ✅ Save session then respond */
+req.session.save(() => {
+  return res.json({
+    success: true,
+    redirectUrl,
+    user: req.session.user
+  });
+});
 /* ✅ Final Response */
 return res.json({
   success: true,
