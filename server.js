@@ -185,32 +185,78 @@ app.get("/getDepartmentUsers", (req, res) => {
     return res.json([]);
   }
 
-  const department = req.session.user.Department;
+  const { Role, Department } = req.session.user;
 
-  const sql = `
-    SELECT 
-      Employee_ID,
-      User_Name,
-      User_Mail,
-      Designation,
-      Department,
-      Role,
-      Phone_Number,
-      Reporting_Person,
-      is_archived
-    FROM mis_user_data
-    WHERE TRIM(Department) = ?
-    ORDER BY Employee_ID DESC
-  `;
+  let sql = "";
+  let params = [];
 
-  db.query(sql, [department], (err, rows) => {
+  /* ==============================
+     DIRECTOR / HR MANAGER → ALL USERS
+  ============================== */
+
+  if (Role === "Director" || Role === "HR Manager") {
+
+    sql = `
+      SELECT 
+        Employee_ID,
+        User_Name,
+        User_Mail,
+        Designation,
+        Department,
+        Role,
+        Phone_Number,
+        Reporting_Person,
+        is_archived
+      FROM mis_user_data
+      ORDER BY Department, Employee_ID DESC
+    `;
+
+  }
+
+  /* ==============================
+     HR / ADMIN → ONLY THEIR DEPARTMENT
+  ============================== */
+
+  else if (Role === "HR" || Role === "Admin") {
+
+    sql = `
+      SELECT 
+        Employee_ID,
+        User_Name,
+        User_Mail,
+        Designation,
+        Department,
+        Role,
+        Phone_Number,
+        Reporting_Person,
+        is_archived
+      FROM mis_user_data
+      WHERE TRIM(Department) = ?
+      ORDER BY Employee_ID DESC
+    `;
+
+    params = [Department];
+  }
+
+  /* ==============================
+     OTHER ROLES → NO ACCESS
+  ============================== */
+
+  else {
+    return res.json([]);
+  }
+
+  db.query(sql, params, (err, rows) => {
+
     if (err) {
       console.error("❌ getDepartmentUsers error:", err.message);
       return res.json([]);
     }
 
     res.json(rows);
+
   });
+
 });
 /* ======================
    ADD USER (HR) ✅ FIXED
