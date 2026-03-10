@@ -12,10 +12,12 @@ const upload = multer();
    Middleware
 ====================== */
 app.use(cors({
-  origin: "https://pixeltruth.com",
+  origin: [
+    "https://pixeltruth.com",
+    "https://www.pixeltruth.com"
+  ],
   credentials: true
 }));
-
 app.set("trust proxy", 1);
 
 
