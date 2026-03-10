@@ -7,7 +7,6 @@ const multer = require("multer");
 
 const app = express();
 const upload = multer();
-;
 
 /* ======================
    Middleware
@@ -1242,23 +1241,71 @@ app.post("/updateDepartmentData", (req, res) => {
     return res.json({ success: false });
   }
 
-  const allowedColumns = [
-    "category",
-    "count",
-    "hours",
-    "minutes",
-    "remarks",
-    "real_Estate_hours",
-    "real_Estate_minutes",
-    "real_Estate_remarks",
-    "impact_brand",
-    "impact_count",
-    "impact_hours",
-    "impact_minutes",
-    "impact_remarks",
-    "itc_platform"
-  ];
+ const allowedColumns = [
 
+"rotation",
+
+"Website_Audit_Type_Of_Work",
+"Website_Audit_Brand",
+"Website_Audit_Type_Of_Task",
+"Website_Audit_hours",
+"Website_Audit_minutes",
+"Website_Audit_Remark",
+"Website_Audit_Status",
+
+"Social_Media_Audit_Type_Of_Work",
+"Social_Media_Audit_Brand",
+"Social_Media_Audit_Type_Of_Task",
+"Social_Media_Audit_hours",
+"Social_Media_Audit_minutes",
+"Social_Media_Audit_Remark",
+"Social_Media_Audit_Status",
+
+"Stationary_Type_Of_Work",
+"Stationary_Brand",
+"Stationary_Project",
+"Stationary_Count",
+"Stationary_hours",
+"Stationary_minutes",
+"Stationary_Remark",
+
+"Real_Estate_Type_Of_Work",
+"Real_Estate_Brand",
+"Real_Estate_Categories",
+"Real_Estate_Count",
+"Real_Estate_hours",
+"Real_Estate_minutes",
+"Real_Estate_Remark",
+
+"Incent_Type_Of_Work",
+"Incent_Brand",
+"Incent_Count",
+"Incent_Eastat_hours",
+"Incent_Eastat_minutes",
+"Incent_Remark",
+
+"ITC_Cigarette_Type_Of_Work",
+"ITC_Cigarette_Platform",
+"ITC_Cigarette_Count",
+"ITC_Cigarette_hours",
+"ITC_Cigarette_minutes",
+"ITC_Cigarette_Remark",
+
+"Nicotine_Type_Of_Work",
+"Nicotine_Platform",
+"Nicotine_Count",
+"Nicotine_hours",
+"Nicotine_minutes",
+"Nicotine_Remark",
+
+"Shopee_Type_Of_Work",
+"Shopee_Platform",
+"Shopee_Count",
+"Shopee_hours",
+"Shopee_minutes",
+"Shopee_Remark"
+
+];
   if (!allowedColumns.includes(column)) {
     return res.json({ success: false, message: "Invalid column" });
   }
