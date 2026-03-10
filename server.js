@@ -1251,41 +1251,44 @@ const values = columns.map(col => row[col]);
 ====================== */
 app.post("/deleteDepartmentData", (req, res) => {
 
-  if (!db) return res.json({ success:false });
+  if (!db) return res.json({ success: false });
 
   const { id, department } = req.body;
 
-  if (!id || !department) {
-    return res.json({ success:false });
-  }
-
-  const dept = department.trim().toLowerCase();
+  if (!id) return res.json({ success: false });
 
   let tableName = "";
+  let idColumn = "insert_id";
 
-  if (dept === "social_media_n_website_audit") {
+  if (department === "Social_Media_N_Website_Audit") {
     tableName = "social_media_n_website_audit_data";
+    idColumn = "insert_id";
   }
-  else if (dept === "media_monitoring") {
+  else if (department === "Media_Monitoring") {
     tableName = "media_monitoring_data";
+    idColumn = "insert_id";
   }
-  else if (dept === "brand_infringement") {
+  else if (department === "Brand_Infringement") {
     tableName = "brand_infringement";
+    idColumn = "id";
   }
   else {
-    return res.json({ success:false });
+    return res.json({ success: false });
   }
 
-  const sql = `DELETE FROM ${tableName} WHERE insert_id = ?`;
+  const sql = `
+    DELETE FROM ${tableName}
+    WHERE ${idColumn} = ?
+  `;
 
-  db.query(sql, [id], err => {
+  db.query(sql, [id], (err) => {
 
     if (err) {
-      console.error("Delete error:", err.message);
-      return res.json({ success:false });
+      console.error("❌ deleteDepartmentData error:", err.message);
+      return res.json({ success: false });
     }
 
-    res.json({ success:true });
+    res.json({ success: true });
 
   });
 
