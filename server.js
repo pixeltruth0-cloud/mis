@@ -1082,8 +1082,9 @@ app.post("/bulkUpload", upload.single("file"), (req, res) => {
       let hasError = false;
 
       results.forEach(row => {
+         console.log("CSV ROW:", row);
 
-        const department = row.department;
+        const department = (row.department || "").trim();
 
         if (!department) {
           hasError = true;
@@ -1097,20 +1098,15 @@ app.post("/bulkUpload", upload.single("file"), (req, res) => {
 
         let tableName = "";
 
-        if (department === "Social_Media_N_Website_Audit") {
-          tableName = "social_media_n_website_audit_data";
-        }
-        else if (department === "Media_Monitoring") {
-          tableName = "media_monitoring_data";
-        }
-        else if (department === "Brand_Infringement") {
-          tableName = "brand_infringement";
-        }
-        else {
-          hasError = true;
-          processed++;
-          return;
-        }
+        if (department.toLowerCase() === "social_media_n_website_audit") {
+  tableName = "social_media_n_website_audit_data";
+}
+else if (department.toLowerCase() === "media_monitoring") {
+  tableName = "media_monitoring_data";
+}
+else if (department.toLowerCase() === "brand_infringement") {
+  tableName = "brand_infringement";
+}
 
         const columns = Object.keys(row);
         const values = Object.values(row);
