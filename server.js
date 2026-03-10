@@ -1083,7 +1083,10 @@ app.post("/bulkUpload", upload.single("file"), (req, res) => {
 
       results.forEach(row => {
          console.log("CSV ROW:", row);
-
+if (row.date && row.date.includes("/")) {
+  const parts = row.date.split("/");
+  row.date = `${parts[2]}-${parts[1]}-${parts[0]}`;
+}
         const department = (row.department || "").trim();
 
         if (!department) {
@@ -1108,8 +1111,10 @@ else if (department.toLowerCase() === "brand_infringement") {
   tableName = "brand_infringement";
 }
 
-        const columns = Object.keys(row);
-        const values = Object.values(row);
+        const columns = Object.keys(row)
+  .filter(col => col && col.trim() !== "");
+
+const values = columns.map(col => row[col]);
 
         const insertSql = `
           INSERT INTO ${tableName}
