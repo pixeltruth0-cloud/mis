@@ -197,27 +197,34 @@ app.get("/getDepartmentUsers", (req, res) => {
 
   /* HR / ADMIN → ONLY THEIR DEPARTMENT */
 
-  else if (role === "HR" || role === "Admin") {
+else if (role === "HR" || role === "Admin") {
 
-    sql = `
-      SELECT 
-        Employee_ID,
-        User_Name,
-        User_Mail,
-        Designation,
-        Department,
-        Role,
-        Phone_Number,
-        Reporting_Person,
-        is_archived
-      FROM mis_user_data
-      WHERE LOWER(TRIM(Department)) = LOWER(?)
-      ORDER BY Employee_ID DESC
-    `;
+  sql = `
+    SELECT DISTINCT
+      u.Employee_ID,
+      u.User_Name,
+      u.User_Mail,
+      u.Designation,
+      u.Department,
+      u.Role,
+      u.Phone_Number,
+      u.Reporting_Person,
+      u.is_archived
+    FROM mis_user_data u
+    LEFT JOIN user_departments d
+      ON u.User_Mail = d.user_mail
+    WHERE
+      u.is_archived = 0
+      AND (
+        LOWER(TRIM(u.Department)) = LOWER(?)
+        OR LOWER(TRIM(d.department)) = LOWER(?)
+      )
+    ORDER BY u.Employee_ID DESC
+  `;
 
-    params = [department];
+  params = [department, department];
 
-  }
+}
 
   else {
     return res.json([]);
