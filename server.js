@@ -805,9 +805,9 @@ app.post("/updateApprovalStatus", (req, res) => {
     });
   }
 
-  const { id, status, department } = req.body;
+ const { insert_id, status } = req.body;
 
-  if (!id || !status || !department) {
+ if (!insert_id || !status){
     return res.json({ success:false });
   }
 
@@ -832,7 +832,7 @@ app.post("/updateApprovalStatus", (req, res) => {
     WHERE insert_id = ?
   `;
 
-  db.query(sql, [status, id], (err) => {
+  db.query(sql, [status, insert_id], (err) => {
     if (err) {
       console.error("Approval update error:", err.message);
       return res.json({ success:false });
