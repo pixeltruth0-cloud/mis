@@ -725,15 +725,15 @@ app.get("/getDepartmentData", (req, res) => {
 
   let tableName = "";
 
-  if (dept === "Social_Media_N_Website_Audit") {
-    tableName = "social_media_n_website_audit_data";
-  }
-  else if (dept === "Media_Monitoring") {
-    tableName = "media_monitoring_data";
-  }
-  else if (dept === "Brand_Infringement") {
-    tableName = "brand_infringement";
-  }
+if (dept === "social_media_n_website_audit") {
+  tableName = "social_media_n_website_audit_data";
+}
+else if (dept === "media_monitoring") {
+  tableName = "media_monitoring_data";
+}
+else if (dept === "brand_infringement") {
+  tableName = "brand_infringement";
+}
   else {
     return res.json([]);
   }
