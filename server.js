@@ -734,6 +734,9 @@ else if (dept === "media_monitoring") {
 else if (dept === "brand_infringement") {
   tableName = "brand_infringement";
 }
+else if (dept === "anti_money_laundering") {
+  tableName = "anti_money_laundering_data";
+}
   else {
     return res.json([]);
   }
