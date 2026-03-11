@@ -828,6 +828,7 @@ else if (dept === "brand_infringement") {
 }
 else if (dept === "anti_money_laundering") {
   tableName = "anti_money_laundering_data";
+  idColumn = "insert_id";
 }
   else {
     return res.json([]);
@@ -1302,6 +1303,9 @@ else if (department.toLowerCase() === "media_monitoring") {
 }
 else if (department.toLowerCase() === "brand_infringement") {
   tableName = "brand_infringement";
+}
+else if (department.toLowerCase() === "anti_money_laundering") {
+  tableName = "anti_money_laundering_data";
 }
 
         const columns = Object.keys(row)
