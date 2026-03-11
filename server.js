@@ -2019,6 +2019,137 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
   });
 
 });
+
+/* ======================
+   USER PRODUCTIVITY SUMMARY (ALL DEPARTMENTS)
+====================== */
+
+app.get("/getUserSummary", (req, res) => {
+
+  if (!db) {
+    return res.json({ success:false });
+  }
+
+  const { user_mail, department, month, year } = req.query;
+
+  if (!user_mail || !department || !month || !year) {
+    return res.json({ success:false });
+  }
+
+  const dept = department.toLowerCase().trim();
+
+  let tableName = "";
+
+  if (dept === "social_media_n_website_audit") {
+    tableName = "social_media_n_website_audit_data";
+  }
+  else if (dept === "media_monitoring") {
+    tableName = "media_monitoring_data";
+  }
+  else if (dept === "brand_infringement") {
+    tableName = "brand_infringement";
+  }
+  else if (dept === "anti_money_laundering") {
+    tableName = "anti_money_laundering_data";
+  }
+  else {
+    return res.json({ success:false });
+  }
+
+  const sql = `
+    SELECT *
+    FROM ${tableName}
+    WHERE user_mail = ?
+      AND MONTH(date) = ?
+      AND YEAR(date) = ?
+    ORDER BY date ASC
+  `;
+
+  db.query(sql, [user_mail, month, year], (err, rows) => {
+
+    if (err) {
+      console.error("❌ Summary Query Error:", err.message);
+      return res.json({ success:false });
+    }
+
+    let totalMinutes = 0;
+
+    rows.forEach(row => {
+
+      Object.keys(row).forEach(key => {
+
+        if (key.endsWith("_hours")) {
+          totalMinutes += Number(row[key] || 0) * 60;
+        }
+
+        if (key.endsWith("_minutes")) {
+          totalMinutes += Number(row[key] || 0);
+        }
+
+        if (key === "hours") {
+          totalMinutes += Number(row[key] || 0) * 60;
+        }
+
+        if (key === "minutes") {
+          totalMinutes += Number(row[key] || 0);
+        }
+
+      });
+
+    });
+
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    const uniqueDates = new Set(
+      rows.map(r => new Date(r.date).toISOString().split("T")[0])
+    );
+
+    const totalDaysFilled = uniqueDates.size;
+
+    const missedDays = daysInMonth - totalDaysFilled;
+
+    const formattedData = rows.map(r => {
+
+      let minutes = 0;
+
+      Object.keys(r).forEach(k => {
+
+        if (k.endsWith("_hours")) {
+          minutes += Number(r[k] || 0) * 60;
+        }
+
+        if (k.endsWith("_minutes")) {
+          minutes += Number(r[k] || 0);
+        }
+
+        if (k === "hours") {
+          minutes += Number(r[k] || 0) * 60;
+        }
+
+        if (k === "minutes") {
+          minutes += Number(r[k] || 0);
+        }
+
+      });
+
+      return {
+        date: new Date(r.date).toISOString().split("T")[0],
+        hours: Math.round(minutes / 60)
+      };
+
+    });
+
+    res.json({
+      success:true,
+      daysInMonth,
+      totalDaysFilled,
+      missedDays,
+      data: formattedData
+    });
+
+  });
+
+});
 /* ======================
    Server Start
 ====================== */
