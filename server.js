@@ -947,15 +947,19 @@ app.post("/updateApprovalStatus", (req, res) => {
   }
 
   let tableName = "";
+  let idColumn = "insert_id";   // default
 
   if (department === "Media_Monitoring") {
     tableName = "media_monitoring_data";
+    idColumn = "insert_id";
   }
   else if (department === "Social_Media_N_Website_Audit") {
     tableName = "social_media_n_website_audit_data";
+    idColumn = "insert_id";
   }
   else if (department === "Brand_Infringement") {
     tableName = "brand_infringement";
+    idColumn = "id";
   }
   else {
     return res.json({ success:false });
@@ -964,7 +968,7 @@ app.post("/updateApprovalStatus", (req, res) => {
   const sql = `
     UPDATE ${tableName}
     SET approval_status = ?
-    WHERE id = ?
+    WHERE ${idColumn} = ?
   `;
 
   db.query(sql, [status, id], (err) => {
