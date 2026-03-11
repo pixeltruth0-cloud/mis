@@ -1403,95 +1403,143 @@ app.post("/updateDepartmentData", (req, res) => {
 
   if (!db) return res.json({ success: false });
 
-  const { id, column, value } = req.body;
+  const { id, column, value, department } = req.body;
 
-  if (!id || !column) {
+  if (!id || !column || !department) {
     return res.json({ success: false });
   }
 
- const allowedColumns = [
+  const dept = department.toLowerCase().trim();
 
-"rotation",
+  let tableName = "";
+  let idColumn = "insert_id";
 
-"Website_Audit_Type_Of_Work",
-"Website_Audit_Brand",
-"Website_Audit_Type_Of_Task",
-"Website_Audit_hours",
-"Website_Audit_minutes",
-"Website_Audit_Remark",
-"Website_Audit_Status",
+  /* ======================
+     TABLE MAPPING
+  ====================== */
 
-"Social_Media_Audit_Type_Of_Work",
-"Social_Media_Audit_Brand",
-"Social_Media_Audit_Type_Of_Task",
-"Social_Media_Audit_hours",
-"Social_Media_Audit_minutes",
-"Social_Media_Audit_Remark",
-"Social_Media_Audit_Status",
-
-"Stationary_Type_Of_Work",
-"Stationary_Brand",
-"Stationary_Project",
-"Stationary_Count",
-"Stationary_hours",
-"Stationary_minutes",
-"Stationary_Remark",
-
-"Real_Estate_Type_Of_Work",
-"Real_Estate_Brand",
-"Real_Estate_Categories",
-"Real_Estate_Count",
-"Real_Estate_hours",
-"Real_Estate_minutes",
-"Real_Estate_Remark",
-
-"Incent_Type_Of_Work",
-"Incent_Brand",
-"Incent_Count",
-"Incent_Eastat_hours",
-"Incent_Eastat_minutes",
-"Incent_Remark",
-
-"ITC_Cigarette_Type_Of_Work",
-"ITC_Cigarette_Platform",
-"ITC_Cigarette_Count",
-"ITC_Cigarette_hours",
-"ITC_Cigarette_minutes",
-"ITC_Cigarette_Remark",
-
-"Nicotine_Type_Of_Work",
-"Nicotine_Platform",
-"Nicotine_Count",
-"Nicotine_hours",
-"Nicotine_minutes",
-"Nicotine_Remark",
-
-"Shopee_Type_Of_Work",
-"Shopee_Platform",
-"Shopee_Count",
-"Shopee_hours",
-"Shopee_minutes",
-"Shopee_Remark"
-
-];
-  if (!allowedColumns.includes(column)) {
-    return res.json({ success: false, message: "Invalid column" });
+  if (dept === "social_media_n_website_audit") {
+    tableName = "social_media_n_website_audit_data";
+    idColumn = "insert_id";
   }
 
+  else if (dept === "media_monitoring") {
+    tableName = "media_monitoring_data";
+    idColumn = "insert_id";
+  }
+
+  else if (dept === "brand_infringement") {
+    tableName = "brand_infringement";
+    idColumn = "id";
+  }
+
+  else if (dept === "anti_money_laundering") {
+    tableName = "anti_money_laundering_data";
+    idColumn = "insert_id";
+  }
+
+  else {
+    return res.json({ success: false, message: "Invalid department" });
+  }
+
+  /* ======================
+     ALLOWED COLUMNS
+  ====================== */
+
+  const allowedColumns = [
+
+    "rotation",
+
+    "Website_Audit_Type_Of_Work",
+    "Website_Audit_Brand",
+    "Website_Audit_Type_Of_Task",
+    "Website_Audit_hours",
+    "Website_Audit_minutes",
+    "Website_Audit_Remark",
+    "Website_Audit_Status",
+
+    "Social_Media_Audit_Type_Of_Work",
+    "Social_Media_Audit_Brand",
+    "Social_Media_Audit_Type_Of_Task",
+    "Social_Media_Audit_hours",
+    "Social_Media_Audit_minutes",
+    "Social_Media_Audit_Remark",
+    "Social_Media_Audit_Status",
+
+    "Stationary_Type_Of_Work",
+    "Stationary_Brand",
+    "Stationary_Project",
+    "Stationary_Count",
+    "Stationary_hours",
+    "Stationary_minutes",
+    "Stationary_Remark",
+
+    "Real_Estate_Type_Of_Work",
+    "Real_Estate_Brand",
+    "Real_Estate_Categories",
+    "Real_Estate_Count",
+    "Real_Estate_hours",
+    "Real_Estate_minutes",
+    "Real_Estate_Remark",
+
+    "Incent_Type_Of_Work",
+    "Incent_Brand",
+    "Incent_Count",
+    "Incent_Eastat_hours",
+    "Incent_Eastat_minutes",
+    "Incent_Remark",
+
+    "ITC_Cigarette_Type_Of_Work",
+    "ITC_Cigarette_Platform",
+    "ITC_Cigarette_Count",
+    "ITC_Cigarette_hours",
+    "ITC_Cigarette_minutes",
+    "ITC_Cigarette_Remark",
+
+    "Nicotine_Type_Of_Work",
+    "Nicotine_Platform",
+    "Nicotine_Count",
+    "Nicotine_hours",
+    "Nicotine_minutes",
+    "Nicotine_Remark",
+
+    "Shopee_Type_Of_Work",
+    "Shopee_Platform",
+    "Shopee_Count",
+    "Shopee_hours",
+    "Shopee_minutes",
+    "Shopee_Remark"
+
+  ];
+
+  if (!allowedColumns.includes(column)) {
+    return res.json({
+      success: false,
+      message: "Invalid column"
+    });
+  }
+
+  /* ======================
+     UPDATE QUERY
+  ====================== */
+
   const sql = `
-    UPDATE social_media_n_website_audit_data
+    UPDATE ${tableName}
     SET ${column} = ?
-    WHERE insert_id = ?
+    WHERE ${idColumn} = ?
   `;
 
   db.query(sql, [value, id], (err) => {
+
     if (err) {
       console.error("❌ updateDepartmentData error:", err.message);
       return res.json({ success: false });
     }
 
     res.json({ success: true });
+
   });
+
 });
 /* ======================
    GET ASSIGNED TASKS (DEPT WISE)
