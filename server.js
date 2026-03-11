@@ -845,29 +845,29 @@ else if (dept === "anti_money_laundering") {
       ORDER BY date DESC
     `;
   }
-  else if (["ADMIN","HR","TEAM_LEAD"].includes(roleUpper)) {
+else if (["ADMIN","HR","TEAM_LEAD"].includes(roleUpper)) {
 
-    sql = `
-      SELECT *
-      FROM ${tableName}
-      WHERE department = ?
-      ORDER BY date DESC
-    `;
+  sql = `
+    SELECT *
+    FROM ${tableName}
+    WHERE LOWER(TRIM(department)) = LOWER(?)
+    ORDER BY date DESC
+  `;
 
-    params = [dept];
-  }
-  else {
+  params = [dept];
+}
+else {
 
-    sql = `
-      SELECT *
-      FROM ${tableName}
-      WHERE user_mail = ?
-        AND department = ?
-      ORDER BY date DESC
-    `;
+  sql = `
+    SELECT *
+    FROM ${tableName}
+    WHERE LOWER(TRIM(user_mail)) = LOWER(?)
+      AND LOWER(TRIM(department)) = LOWER(?)
+    ORDER BY date DESC
+  `;
 
-    params = [userMail, dept];
-  }
+  params = [userMail, dept];
+}
 
   db.query(sql, params, (err, rows) => {
 
@@ -1379,6 +1379,10 @@ app.post("/deleteDepartmentData", (req, res) => {
     tableName = "brand_infringement";
     idColumn = "id";
   }
+else if (dept === "anti_money_laundering") {
+  tableName = "anti_money_laundering_data";
+  idColumn = "insert_id";
+}
   else {
     return res.json({ success: false });
   }
