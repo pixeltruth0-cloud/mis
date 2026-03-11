@@ -234,16 +234,28 @@ else if (role === "HR" || role === "Admin") {
     return res.json([]);
   }
 
-  db.query(sql, params, (err, rows) => {
+db.query(sql, params, (err, rows) => {
 
-    if (err) {
-      console.error("❌ getDepartmentUsers error:", err.message);
-      return res.json([]);
+  if (err) {
+    console.error("❌ Common Dashboard Error:", err.message);
+    return res.json([]);
+  }
+
+  // ✅ FIX DATE FORMAT
+  rows.forEach(row => {
+
+    if (row.date) {
+      row.date = row.date.toISOString().split("T")[0];
     }
 
-    res.json(rows);
+    if (row.created_at) {
+      row.created_at = row.created_at.toISOString().split("T")[0];
+    }
 
   });
+
+  res.json(rows);
+});
 
 });
 /* ======================
