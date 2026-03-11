@@ -577,16 +577,40 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
     });
   }
 
-  const data = req.body;
+  const rawData = req.body;
+  const data = {};
 
-  if (!data || Object.keys(data).length === 0) {
-    return res.json({
-      success: false,
-      message: "No data received"
-    });
-  }
+  // 🔥 CLEAN ARRAY DATA
+  Object.keys(rawData).forEach(key => {
 
-  // ❌ unwanted fields remove
+    const cleanKey = key.replace(/\[\]$/, '');
+
+    if (Array.isArray(rawData[key])) {
+
+      if (
+        cleanKey.endsWith("_hours") ||
+        cleanKey.endsWith("_minutes") ||
+        cleanKey.endsWith("_Count")
+      ) {
+
+        data[cleanKey] = rawData[key]
+          .map(v => Number(v) || 0)
+          .reduce((a,b) => a+b,0);
+
+      } else {
+
+        data[cleanKey] = rawData[key].join(", ");
+
+      }
+
+    } else {
+
+      data[cleanKey] = rawData[key];
+
+    }
+
+  });
+
   delete data.id;
   delete data.insert_id;
   delete data.created_at;
@@ -603,21 +627,23 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
   `;
 
   db.query(sql, values, (err) => {
+
     if (err) {
       console.error("❌ Brand Infringement Insert Error:", err.message);
       return res.json({
-        success: false,
-        message: "Insert failed"
+        success:false,
+        message:"Insert failed"
       });
     }
 
     res.json({
-      success: true,
-      message: "Brand infringement submitted successfully"
+      success:true,
+      message:"Brand infringement submitted successfully"
     });
-  });
-});
 
+  });
+
+});
 /* ======================
    MEDIA MONITORING SUBMIT
 ====================== */
