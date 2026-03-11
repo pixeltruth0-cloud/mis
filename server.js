@@ -572,15 +572,14 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 
   if (!db) {
     return res.json({
-      success: false,
-      message: "Database not connected"
+      success:false,
+      message:"Database not connected"
     });
   }
 
   const rawData = req.body;
   const data = {};
 
-  // 🔥 CLEAN ARRAY DATA
   Object.keys(rawData).forEach(key => {
 
     const cleanKey = key.replace(/\[\]$/, '');
@@ -611,34 +610,89 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 
   });
 
-  delete data.id;
-  delete data.insert_id;
-  delete data.created_at;
+  const allowedColumns = [
 
-  const columns = Object.keys(data);
-  const values = Object.values(data);
+"user_name",
+"user_mail",
+"department",
+"date",
+"rotation",
 
-  const placeholders = columns.map(() => "?").join(",");
+"Banking_Type_Of_Work",
+"Banking_Brand",
+"Banking_Channel",
+"Banking_Sub_Channel",
+"Banking_Categories",
+"Banking_Count",
+"Banking_Remark",
+"Banking_hours",
+"Banking_minutes",
+"Banking_Rotation",
+
+"Finance_Type_Of_Work",
+"Finance_Brand",
+"Finance_Channel",
+"Finance_Sub_Channel",
+"Finance_Categories",
+"Finance_Count",
+"Finance_Remark",
+"Finance_hours",
+"Finance_minutes",
+"Finance_Rotation",
+
+"Trading_Type_Of_Work",
+"Trading_Brand",
+"Trading_Channel",
+"Trading_Sub_Channel",
+"Trading_Categories",
+"Trading_Count",
+"Trading_Remark",
+"Trading_hours",
+"Trading_minutes",
+"Trading_Rotation",
+
+"POC_Type_Of_Work",
+"POC_Brand",
+"POC_Other_Brand",
+"POC_Channel",
+"POC_Sub_Channel",
+"POC_Count",
+"POC_hours",
+"POC_minutes",
+"POC_Remark"
+
+];
+
+  const values = allowedColumns.map(col => {
+
+    if (col.endsWith("_hours") || col.endsWith("_minutes") || col.endsWith("_Count")) {
+      return data[col] ? Number(data[col]) : 0;
+    }
+
+    return data[col] ? data[col] : "";
+  });
+
+  const placeholders = allowedColumns.map(()=>"?").join(",");
 
   const sql = `
-    INSERT INTO brand_infringement
-    (${columns.join(",")})
-    VALUES (${placeholders})
+  INSERT INTO brand_infringement
+  (${allowedColumns.join(",")})
+  VALUES (${placeholders})
   `;
 
-  db.query(sql, values, (err) => {
+  db.query(sql, values, (err)=>{
 
-    if (err) {
-      console.error("❌ Brand Infringement Insert Error:", err.message);
+    if(err){
+      console.error("❌ BI INSERT ERROR:",err.message);
       return res.json({
         success:false,
-        message:"Insert failed"
+        message:err.message
       });
     }
 
     res.json({
       success:true,
-      message:"Brand infringement submitted successfully"
+      message:"Brand Infringement submitted successfully"
     });
 
   });
