@@ -801,9 +801,7 @@ app.post("/submitMediaMonitoring", upload.none(), (req, res) => {
 ====================== */
 app.get("/getDepartmentData", (req, res) => {
 
-  if (!db) {
-    return res.json([]);
-  }
+  if (!db) return res.json([]);
 
   const { user_mail, role, department } = req.query;
 
@@ -817,25 +815,26 @@ app.get("/getDepartmentData", (req, res) => {
 
   let tableName = "";
 
-if (dept === "social_media_n_website_audit") {
-  tableName = "social_media_n_website_audit_data";
-}
-else if (dept === "media_monitoring") {
-  tableName = "media_monitoring_data";
-}
-else if (dept === "brand_infringement") {
-  tableName = "brand_infringement";
-}
-else if (dept === "anti_money_laundering") {
-  tableName = "anti_money_laundering_data";
-  idColumn = "insert_id";
-}
+  if (dept === "social_media_n_website_audit") {
+    tableName = "social_media_n_website_audit_data";
+  }
+  else if (dept === "media_monitoring") {
+    tableName = "media_monitoring_data";
+  }
+  else if (dept === "brand_infringement") {
+    tableName = "brand_infringement";
+  }
+  else if (dept === "anti_money_laundering") {
+    tableName = "anti_money_laundering_data";
+  }
   else {
     return res.json([]);
   }
 
   let sql = "";
   let params = [];
+
+  /* DIRECTOR / HR MANAGER → ALL DATA */
 
   if (["DIRECTOR","HR_MANAGER"].includes(roleUpper)) {
 
@@ -844,41 +843,47 @@ else if (dept === "anti_money_laundering") {
       FROM ${tableName}
       ORDER BY date DESC
     `;
+
   }
-else if (["ADMIN","HR","TEAM_LEAD"].includes(roleUpper)) {
 
-  sql = `
-    SELECT *
-    FROM ${tableName}
-    WHERE LOWER(TRIM(department)) = LOWER(?)
-    ORDER BY date DESC
-  `;
+  /* ADMIN / HR / TL */
 
-  params = [dept];
-}
-else {
+  else if (["ADMIN","HR","TEAM_LEAD"].includes(roleUpper)) {
 
-  sql = `
-    SELECT *
-    FROM ${tableName}
-    WHERE LOWER(TRIM(user_mail)) = LOWER(?)
-      AND LOWER(TRIM(department)) = LOWER(?)
-    ORDER BY date DESC
-  `;
+    sql = `
+      SELECT *
+      FROM ${tableName}
+      ORDER BY date DESC
+    `;
 
-  params = [userMail, dept];
-}
+  }
+
+  /* EMPLOYEE */
+
+  else {
+
+    sql = `
+      SELECT *
+      FROM ${tableName}
+      WHERE LOWER(TRIM(user_mail)) = LOWER(?)
+      ORDER BY date DESC
+    `;
+
+    params = [userMail];
+
+  }
 
   db.query(sql, params, (err, rows) => {
 
     if (err) {
-      console.error("❌ Common Dashboard Error:", err.message);
+      console.error("❌ Dashboard Query Error:", err.message);
       return res.json([]);
     }
 
-    console.log("DATA COUNT:", rows.length); // debug
+    console.log("AML DATA COUNT:", rows.length);
 
     res.json(rows);
+
   });
 
 });
