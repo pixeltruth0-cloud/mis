@@ -964,7 +964,7 @@ app.post("/updateApprovalStatus", (req, res) => {
   const sql = `
     UPDATE ${tableName}
     SET approval_status = ?
-    WHERE insert_id = ?
+    WHERE id = ?
   `;
 
   db.query(sql, [status, id], (err) => {
