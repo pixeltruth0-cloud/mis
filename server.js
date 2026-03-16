@@ -797,6 +797,112 @@ app.post("/submitMediaMonitoring", upload.none(), (req, res) => {
 });
 
 /* ======================
+   Anti Money Laundering SUBMIT
+====================== */
+app.post("/submitAntiMoneyLaundering", upload.none(), (req, res) => {
+
+  if (!db) {
+    return res.json({
+      success:false,
+      message:"Database not connected"
+    });
+  }
+
+  const data = req.body;
+
+if (
+    !data.user_name ||
+    !data.user_mail ||
+    !data.department ||
+  ) {
+    return res.json({
+      success: false,
+      message: "Missing required fields"
+    });
+  }
+
+  const allowedColumns = [
+
+"user_name",
+"user_mail",
+"department",
+"date",
+
+"Daily_Cases",
+"Multiple_Cases",
+"Not_Found_Cases",
+"App",
+"Net_Banking_Credit_Card",
+"Messaging_Channel_Platform",
+"Cryto_cases",
+"International_cases",
+"Total_Cases",
+"Errors",
+
+"Non_video_qc",
+"video_qc",
+"Total_Qc",
+"home_qc",
+
+"Website_Searching",
+"Remark_Checking",
+"Credential_Making",
+
+"UPI_Fraud",
+"investment_web_case",
+"investment_scam_case",
+"investment_scam_scrap",
+"IS_App",
+"remark",
+"Investment_Scam",
+"Additional_Information_1",
+"Additional_Information_2",
+"Additional_Information_3",
+"Additional_Information_4",
+"Additional_Information_5",
+"Additional_Information_6",
+"Additional_Information_7",
+"Additional_Information_8"
+
+];
+
+  const values = allowedColumns.map(col => {
+
+    if (col.endsWith("_hours") || col.endsWith("_minutes") || col.endsWith("_Count")) {
+      return data[col] ? Number(data[col]) : 0;
+    }
+
+    return data[col] ? data[col] : "";
+  });
+
+  const placeholders = allowedColumns.map(()=>"?").join(",");
+
+  const sql = `
+  INSERT INTO anti_money_laundering_data
+  (${allowedColumns.join(",")})
+  VALUES (${placeholders})
+  `;
+
+  db.query(sql, values, (err)=>{
+
+    if(err){
+      console.error("❌ BI INSERT ERROR:",err.message);
+      return res.json({
+        success:false,
+        message:err.message
+      });
+    }
+
+    res.json({
+      success:true,
+      message:"Anti Money Laundering submitted successfully"
+    });
+
+  });
+
+});
+
+/* ======================
    COMMON DASHBOARD (ALL DEPARTMENTS)
 ====================== */
 app.get("/getDepartmentData", (req, res) => {
