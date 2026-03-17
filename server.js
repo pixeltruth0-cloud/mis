@@ -869,12 +869,25 @@ if (
 
   const values = allowedColumns.map(col => {
 
-    if (col.endsWith("_hours") || col.endsWith("_minutes") || col.endsWith("_Count")) {
-      return data[col] ? Number(data[col]) : 0;
-    }
+  const val = data[col];
 
-    return data[col] ? data[col] : "";
-  });
+  // 🔥 convert numbers properly
+  if (
+    col.endsWith("_Cases") ||
+    col.endsWith("_qc") ||
+    col.endsWith("_Count") ||
+    col.includes("Cases") ||
+    col.includes("Qc") ||
+    col.includes("Fraud") ||
+    col.includes("Information")
+  ) {
+    return val ? Number(val) : 0;
+  }
+
+  // 🔥 allow NULL instead of ""
+  return val !== undefined ? val : null;
+
+});
 
   const placeholders = allowedColumns.map(()=>"?").join(",");
 
