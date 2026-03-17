@@ -1,4 +1,4 @@
-const express = require("express");   // ✅ ADD THIS LINE
+const express = require("express"); 
 const session = require("express-session");
 const mysql = require("mysql2");
 const cors = require("cors");
@@ -813,7 +813,7 @@ app.post("/submitAntiMoneyLaundering", upload.none(), (req, res) => {
 if (
     !data.user_name ||
     !data.user_mail ||
-    !data.department ||
+    !data.department
   ) {
     return res.json({
       success: false,
