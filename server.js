@@ -813,7 +813,8 @@ app.post("/submitAntiMoneyLaundering", upload.none(), (req, res) => {
 if (
     !data.user_name ||
     !data.user_mail ||
-    !data.department
+    !data.department ||
+    !data.date 
   ) {
     return res.json({
       success: false,
