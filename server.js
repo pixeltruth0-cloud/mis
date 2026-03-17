@@ -813,6 +813,7 @@ app.post("/submitAntiMoneyLaundering", upload.none(), (req, res) => {
 if (
     !data.user_name ||
     !data.user_mail ||
+    !data.department ||
     !data.date 
   ) {
     return res.json({
@@ -821,11 +822,13 @@ if (
     });
   }
 
-  const allowedColumns = [
+ const allowedColumns = [
 
 "user_name",
 "user_mail",
+"department",
 "date",
+"Attendence",   // ✅ ADD THIS
 
 "Daily_Cases",
 "Multiple_Cases",
