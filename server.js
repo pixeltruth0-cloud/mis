@@ -75,7 +75,7 @@ app.post("/login", (req, res) => {
     return res.json({ success: false, message: "Database not connected" });
   }
 
-  const { User_Mail, Password, Department } = req.body;
+  const { User_Mail, Password, Department, Role } = req.body;
 
  if (!User_Mail || !Password) {
   return res.json({ success: false, message: "Missing fields" });
