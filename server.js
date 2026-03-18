@@ -97,6 +97,14 @@ app.post("/login", (req, res) => {
 
     const user = rows[0];
 
+     // 🔐 ROLE VALIDATION (ADD THIS)
+if (user.Role !== Role) {
+  return res.json({
+    success: false,
+    message: "Invalid role selected"
+  });
+}
+
     // 🔐 Check if selected department is allowed
     const deptSql = `
       SELECT department
