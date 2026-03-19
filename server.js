@@ -41,21 +41,29 @@ app.use(express.urlencoded({ extended: true }));
 /* ======================
    Database Connection
 ====================== */
+/* ======================
+   Database Connection (FIXED - POOL)
+====================== */
 let db = null;
 
 if (!process.env.DATABASE_URL) {
   console.error("❌ DATABASE_URL not found");
 } else {
-  db = mysql.createConnection(process.env.DATABASE_URL);
 
-  db.connect((err) => {
-    if (err) {
-      console.error("❌ DB connection failed:", err.message);
-      db = null;
-    } else {
-      console.log("✅ DB connected successfully");
-    }
+  db = mysql.createPool({
+    uri: process.env.DATABASE_URL,
+    connectionLimit: 10,
+    waitForConnections: true,
+    queueLimit: 0
   });
+
+  console.log("✅ DB Pool connected");
+
+  // 🔥 Error handling (VERY IMPORTANT)
+  db.on("error", (err) => {
+    console.error("❌ DB Pool Error:", err.message);
+  });
+
 }
 
 /* ======================
@@ -1947,22 +1955,22 @@ app.get("/getSuperAdminDashboardData", (req, res) => {
 
 const submissionQuery = `
   SELECT DISTINCT user_mail FROM social_media_n_website_audit_data
-  WHERE DATE(created_at) = ?
+  WHERE DATE(date) = ?
 
   UNION
 
   SELECT DISTINCT user_mail FROM media_monitoring_data
-  WHERE DATE(created_at) = ?
+  WHERE DATE(date) = ?
 
   UNION
 
   SELECT DISTINCT user_mail FROM brand_infringement
-  WHERE DATE(created_at) = ?
+  WHERE DATE(date) = ?
 
   UNION
 
   SELECT DISTINCT user_mail FROM anti_money_laundering_data
-  WHERE DATE(created_at) = ?
+  WHERE DATE(date) = ?
 `;
 
     db.query(submissionQuery, [today, today, today, today], (err, submissions) => {
@@ -1975,36 +1983,35 @@ const submissionQuery = `
       /* ===============================
          STEP 3 – GET INACTIVE (3 DAYS)
       =============================== */
+const inactiveQuery = `
+  SELECT COUNT(*) AS inactiveUsers
+  FROM mis_user_data u
+  WHERE u.is_archived = 0
+    AND u.Role NOT IN ('HR','Admin','Team_Lead','Director','HR Manager')
+    AND NOT EXISTS (
+      SELECT 1 FROM social_media_n_website_audit_data s
+        WHERE s.user_mail = u.User_Mail
+        AND DATE(s.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
 
-      const inactiveQuery = `
-        SELECT COUNT(*) AS inactiveUsers
-        FROM mis_user_data u
-        WHERE u.is_archived = 0
-          AND u.Role NOT IN ('HR','Admin','Team_Lead','Director','HR Manager')
-          AND NOT EXISTS (
-            SELECT 1 FROM social_media_n_website_audit_data s
-              WHERE s.user_mail = u.User_Mail
-              AND s.created_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
+      UNION
 
-            UNION
+      SELECT 1 FROM media_monitoring_data m
+        WHERE m.user_mail = u.User_Mail
+        AND DATE(m.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
 
-            SELECT 1 FROM media_monitoring_data m
-              WHERE m.user_mail = u.User_Mail
-              AND m.created_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
+      UNION
 
-            UNION
+      SELECT 1 FROM brand_infringement b
+        WHERE b.user_mail = u.User_Mail
+        AND DATE(b.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
 
-            SELECT 1 FROM brand_infringement b
-              WHERE b.user_mail = u.User_Mail
-              AND b.created_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
+      UNION
 
-              UNION
-
-SELECT 1 FROM anti_money_laundering_data a
-WHERE a.user_mail = u.User_Mail
-AND a.created_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
-          )
-      `;
+      SELECT 1 FROM anti_money_laundering_data a
+        WHERE a.user_mail = u.User_Mail
+        AND DATE(a.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
+    )
+`;
 
       db.query(inactiveQuery, (err, inactiveRows) => {
 
@@ -2390,7 +2397,7 @@ app.get("/getSuperAdminRawData", (req, res) => {
 
   tables.forEach(table => {
 
-    let q = `SELECT user_name, user_mail, department, date, created_at FROM ${table}`;
+    let q = `SELECT user_name, user_mail, department, date FROM ${table}`;
 
     if (department && department !== "ALL") {
       q += ` WHERE department = '${department}'`;
