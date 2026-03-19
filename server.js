@@ -2367,6 +2367,60 @@ app.get("/getUserSummary", (req, res) => {
   });
 
 });
+
+/* ======================
+   SUPER ADMIN FULL RAW DATA (ALL TABLES)
+====================== */
+
+app.get("/getSuperAdminRawData", (req, res) => {
+
+  if (!db) return res.json([]);
+
+  const { department } = req.query;
+
+  let queries = [];
+
+  // 🔥 All tables
+  const tables = [
+    "social_media_n_website_audit_data",
+    "media_monitoring_data",
+    "brand_infringement",
+    "anti_money_laundering_data"
+  ];
+
+  tables.forEach(table => {
+
+    let q = `SELECT user_name, user_mail, department, date, created_at FROM ${table}`;
+
+    if (department && department !== "ALL") {
+      q += ` WHERE department = '${department}'`;
+    }
+
+    queries.push(q);
+
+  });
+
+  const finalQuery = queries.join(" UNION ALL ");
+
+  db.query(finalQuery, (err, rows) => {
+
+    if (err) {
+      console.error("❌ RAW DATA ERROR:", err.message);
+      return res.json([]);
+    }
+
+    // ✅ Normalize date
+    rows.forEach(r => {
+      if (r.date) {
+        r.date = new Date(r.date).toISOString().split("T")[0];
+      }
+    });
+
+    res.json(rows);
+
+  });
+
+});
 /* ======================
    Server Start
 ====================== */
