@@ -998,12 +998,20 @@ const roles = role.split(",").map(r => r.trim().toUpperCase().replace(/\s+/g, "_
   let sql = "";
   let params = [];
 
-  /* DIRECTOR / HR MANAGER → ALL DATA */
+// 🔥 ADD THIS ABOVE (just before if block)
+let orderByColumn = "insert_id";
+
+if (tableName === "brand_infringement") {
+  orderByColumn = "id";
+}
+
+
+// 🔥 REPLACE COMPLETE BLOCK
 if (
   roles.includes("DIRECTOR") ||
   roles.includes("HR_MANAGER")
 ) {
-  sql = `SELECT * FROM ${tableName} ORDER BY date DESC, insert_id DESC`;
+  sql = `SELECT * FROM ${tableName} ORDER BY date DESC, ${orderByColumn} DESC`;
 }
 
 else if (
@@ -1011,7 +1019,7 @@ else if (
   roles.includes("HR") ||
   roles.includes("TEAM_LEAD")
 ) {
-  sql = `SELECT * FROM ${tableName} ORDER BY date DESC, insert_id DESC`;
+  sql = `SELECT * FROM ${tableName} ORDER BY date DESC, ${orderByColumn} DESC`;
 }
 
 else {
@@ -1019,11 +1027,10 @@ else {
     SELECT *
     FROM ${tableName}
     WHERE LOWER(TRIM(user_mail)) = LOWER(?)
-    ORDER BY date DESC, insert_id DESC
+    ORDER BY date DESC, ${orderByColumn} DESC
   `;
   params = [userMail];
 }
-
   db.query(sql, params, (err, rows) => {
 
     if (err) {
