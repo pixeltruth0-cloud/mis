@@ -104,10 +104,10 @@ app.post("/login", (req, res) => {
     }
 
     const user = rows[0];
-     const roles = user.Role.split(",").map(r => r.trim().toUpperCase());
+     const roles = user.Role.split(",").map(r => r.trim());
+     const selectedRole = Role.trim();
 
-     // 🔐 ROLE VALIDATION (ADD THIS)
-const selectedRole = Role.trim().toUpperCase();
+
 
 if (!roles.includes(selectedRole)) {
   return res.json({
@@ -166,13 +166,13 @@ else if (roles.includes("Admin")) {
 }
 
 // 🔥 USER SELECTED ROLE BASED
-else if (Role === "Team_Lead" && roles.includes("Team_Lead")) {
+else if (selectedRole === "Team_Lead"){
   redirectUrl = `${BASE_URL}/TL/${Department}/TL_dashboard.html`;
 }
 
 else if (
-  (Role === "Employee" && roles.includes("Employee")) ||
-  (Role === "Intern" && roles.includes("Intern"))
+  selectedRole === "Employee" ||
+  selectedRole === "Intern"
 ) {
   redirectUrl = `${BASE_URL}/${Department}/dashboard.html`;
 }
