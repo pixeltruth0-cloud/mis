@@ -104,10 +104,12 @@ app.post("/login", (req, res) => {
     }
 
     const user = rows[0];
-     const roles = user.Role.split(",").map(r => r.trim());
+     const roles = user.Role.split(",").map(r => r.trim().toUpperCase());
 
      // 🔐 ROLE VALIDATION (ADD THIS)
-if (!roles.includes(Role)) {
+const selectedRole = Role.trim().toUpperCase();
+
+if (!roles.includes(selectedRole)) {
   return res.json({
     success: false,
     message: "Invalid role selected"
