@@ -125,7 +125,13 @@ if (!roles.includes(Role)) {
     db.query(deptSql, [user.User_Mail, Department], (err, deptRows) => {
 
   // ✅ Skip department validation for Super Admin
-  if (user.Role !== "Director" && user.Role !== "HR Manager") {
+if (
+  !roles.includes("Director") &&
+  !roles.includes("HR Manager") &&
+  !roles.includes("Team_Lead") &&
+  !roles.includes("Admin") &&
+  !roles.includes("HR")
+) {
 
     if (!err && deptRows.length === 0 && user.Department !== Department) {
       return res.json({
@@ -986,43 +992,30 @@ const roles = role.split(",").map(r => r.trim().toUpperCase().replace(/\s+/g, "_
   let params = [];
 
   /* DIRECTOR / HR MANAGER → ALL DATA */
+if (
+  roles.includes("DIRECTOR") ||
+  roles.includes("HR_MANAGER")
+) {
+  sql = `SELECT * FROM ${tableName} ORDER BY date DESC`;
+}
 
-  if (["DIRECTOR","HR_MANAGER"].includes(roleUpper)) {
+else if (
+  roles.includes("ADMIN") ||
+  roles.includes("HR") ||
+  roles.includes("TEAM_LEAD")
+) {
+  sql = `SELECT * FROM ${tableName} ORDER BY date DESC`;
+}
 
-    sql = `
-      SELECT *
-      FROM ${tableName}
-      ORDER BY date DESC
-    `;
-
-  }
-
-  /* ADMIN / HR / TL */
-
-  else if (["ADMIN","HR","TEAM_LEAD"].includes(roleUpper)) {
-
-    sql = `
-      SELECT *
-      FROM ${tableName}
-      ORDER BY date DESC
-    `;
-
-  }
-
-  /* EMPLOYEE */
-
-  else {
-
-    sql = `
-      SELECT *
-      FROM ${tableName}
-      WHERE LOWER(TRIM(user_mail)) = LOWER(?)
-      ORDER BY date DESC
-    `;
-
-    params = [userMail];
-
-  }
+else {
+  sql = `
+    SELECT *
+    FROM ${tableName}
+    WHERE LOWER(TRIM(user_mail)) = LOWER(?)
+    ORDER BY date DESC
+  `;
+  params = [userMail];
+}
 
   db.query(sql, params, (err, rows) => {
 
@@ -1158,20 +1151,27 @@ app.get("/getUsersByDepartment", (req, res) => {
 
   const dept = department.trim();
 
-  const sql = `
-    SELECT DISTINCT
-      u.User_Name,
-      u.User_Mail
-    FROM mis_user_data u
-    LEFT JOIN user_departments d
-      ON u.User_Mail = d.user_mail
-    WHERE u.is_archived = 0
-      AND TRIM(u.Role) NOT IN ('HR','Admin','Director','HR Manager')
-      AND (
-        TRIM(u.Department) = ?
-        OR TRIM(d.department) = ?
-      )
-  `;
+const sql = `
+  SELECT DISTINCT
+    u.User_Name,
+    u.User_Mail
+  FROM mis_user_data u
+  LEFT JOIN user_departments d
+    ON u.User_Mail = d.user_mail
+  WHERE u.is_archived = 0
+
+    -- 🔥 MULTI ROLE SAFE FILTER
+    AND u.Role NOT LIKE '%HR%'
+    AND u.Role NOT LIKE '%Admin%'
+    AND u.Role NOT LIKE '%Director%'
+    AND u.Role NOT LIKE '%HR Manager%'
+
+    -- 🔥 DEPARTMENT MATCH
+    AND (
+      LOWER(TRIM(u.Department)) = LOWER(?)
+      OR LOWER(TRIM(d.department)) = LOWER(?)
+    )
+`;
 
   db.query(sql, [dept, dept], (err, rows) => {
     if (err) {
