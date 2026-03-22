@@ -125,22 +125,18 @@ if (!roles.includes(Role)) {
     db.query(deptSql, [user.User_Mail, Department], (err, deptRows) => {
 
   // ✅ Skip department validation for Super Admin
-if (
-  !roles.includes("Director") &&
-  !roles.includes("HR Manager") &&
-  !roles.includes("Team_Lead") &&
-  !roles.includes("Admin") &&
-  !roles.includes("HR")
-) {
+if (Role === "Employee" || Role === "Intern") {
 
-    if (!err && deptRows.length === 0 && user.Department !== Department) {
-      return res.json({
-        success: false,
-        message: "Unauthorized department access"
-      });
-    }
-
+  if (!err && deptRows.length === 0 && user.Department !== Department) {
+    return res.json({
+      success: false,
+      message: "Unauthorized department access"
+    });
   }
+
+}
+
+// ✅ TL / Admin / HR / Director → NO restriction
 
 
    const BASE_URL = "https://pixeltruth.com/mis";
@@ -1814,7 +1810,9 @@ app.get("/getTLDashboardData", (req, res) => {
     SELECT COUNT(*) AS count
     FROM mis_user_data
     WHERE Department = ?
-      AND Role NOT IN ('HR', 'Admin', 'Team_Lead')
+      AND Role NOT LIKE '%HR%'
+AND Role NOT LIKE '%Admin%'
+AND Role NOT LIKE '%Team_Lead%'
       AND is_archived = 0
   `;
 
@@ -1948,7 +1946,11 @@ app.get("/getSuperAdminDashboardData", (req, res) => {
     SELECT User_Mail, Department
     FROM mis_user_data
     WHERE is_archived = 0
-      AND Role NOT IN ('HR','Admin','Team_Lead','Director','HR Manager')
+      AND Role NOT LIKE '%HR%'
+AND Role NOT LIKE '%Admin%'
+AND Role NOT LIKE '%Team_Lead%'
+AND Role NOT LIKE '%Director%'
+AND Role NOT LIKE '%HR Manager%'
   `;
 
   db.query(usersQuery, (err, users) => {
