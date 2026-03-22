@@ -104,9 +104,10 @@ app.post("/login", (req, res) => {
     }
 
     const user = rows[0];
+     const roles = user.Role.split(",").map(r => r.trim());
 
      // 🔐 ROLE VALIDATION (ADD THIS)
-if (user.Role !== Role) {
+if (!roles.includes(Role)) {
   return res.json({
     success: false,
     message: "Invalid role selected"
@@ -139,27 +140,36 @@ if (user.Role !== Role) {
    const BASE_URL = "https://pixeltruth.com/mis";
 let redirectUrl = "";
 
-if (user.Role === "Director" || user.Role === "HR Manager") {
+if (roles.includes("Director") || roles.includes("HR Manager")) {
   redirectUrl = `${BASE_URL}/super_admin/dashboard.html`;
 }
-else if (user.Role === "HR") {
+
+else if (roles.includes("HR")) {
   redirectUrl = `${BASE_URL}/HR/${Department}/HR_dashboard.html`;
 }
 
-else if (user.Role === "Admin") {
+else if (roles.includes("Admin")) {
   redirectUrl = `${BASE_URL}/Admin/${Department}/Admin_dashboard.html`;
 }
-else if (roles.includes("Team_Lead")) {
-  redirectUrl = `${BASE_URL}/TL/${user.Department}/TL_dashboard.html`;
+
+// 🔥 USER SELECTED ROLE BASED
+else if (Role === "Team_Lead" && roles.includes("Team_Lead")) {
+  redirectUrl = `${BASE_URL}/TL/${Department}/TL_dashboard.html`;
 }
 
-else if (roles.includes("Employee")) {
-  redirectUrl = `${BASE_URL}/${user.Department}/dashboard.html`;
-}
-else {
+else if (
+  (Role === "Employee" && roles.includes("Employee")) ||
+  (Role === "Intern" && roles.includes("Intern"))
+) {
   redirectUrl = `${BASE_URL}/${Department}/dashboard.html`;
 }
 
+else {
+  return res.json({
+    success: false,
+    message: "Invalid role selection"
+  });
+}
 /* ✅ Session */
 req.session.user = {
   User_Name: user.User_Name,
@@ -950,7 +960,7 @@ app.get("/getDepartmentData", (req, res) => {
     return res.json([]);
   }
 
-  const roleUpper = role.trim().toUpperCase().replace(/\s+/g, "_");
+const roles = role.split(",").map(r => r.trim().toUpperCase().replace(/\s+/g, "_"));
   const dept = department.trim().toLowerCase();
   const userMail = user_mail.trim();
 
