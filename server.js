@@ -127,7 +127,17 @@ if (!roles.includes(Role)) {
   // ✅ Skip department validation for Super Admin
 if (Role === "Employee" || Role === "Intern") {
 
-  if (!err && deptRows.length === 0 && user.Department !== Department) {
+    // 🔥 allow if main department matches
+  if (user.Department === Department) {
+    // OK
+  }
+
+  // 🔥 allow if mapping exists
+  else if (!err && deptRows.length > 0) {
+    // OK
+  }
+
+  else {
     return res.json({
       success: false,
       message: "Unauthorized department access"
@@ -136,8 +146,7 @@ if (Role === "Employee" || Role === "Intern") {
 
 }
 
-// ✅ TL / Admin / HR / Director → NO restriction
-
+// ✅ TL / Admin / HR / Director → NO CHECK AT ALL
 
    const BASE_URL = "https://pixeltruth.com/mis";
 let redirectUrl = "";
