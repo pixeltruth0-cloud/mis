@@ -149,8 +149,12 @@ else if (user.Role === "HR") {
 else if (user.Role === "Admin") {
   redirectUrl = `${BASE_URL}/Admin/${Department}/Admin_dashboard.html`;
 }
-else if (user.Role === "Team_Lead") {
-  redirectUrl = `${BASE_URL}/TL/${Department}/TL_dashboard.html`;
+else if (roles.includes("Team_Lead")) {
+  redirectUrl = `${BASE_URL}/TL/${user.Department}/TL_dashboard.html`;
+}
+
+else if (roles.includes("Employee")) {
+  redirectUrl = `${BASE_URL}/${user.Department}/dashboard.html`;
 }
 else {
   redirectUrl = `${BASE_URL}/${Department}/dashboard.html`;
