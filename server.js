@@ -1003,7 +1003,7 @@ if (
   roles.includes("DIRECTOR") ||
   roles.includes("HR_MANAGER")
 ) {
-  sql = `SELECT * FROM ${tableName} ORDER BY date DESC`;
+  sql = `SELECT * FROM ${tableName} ORDER BY date DESC, insert_id DESC`;
 }
 
 else if (
@@ -1011,7 +1011,7 @@ else if (
   roles.includes("HR") ||
   roles.includes("TEAM_LEAD")
 ) {
-  sql = `SELECT * FROM ${tableName} ORDER BY date DESC`;
+  sql = `SELECT * FROM ${tableName} ORDER BY date DESC, insert_id DESC`;
 }
 
 else {
@@ -1019,7 +1019,7 @@ else {
     SELECT *
     FROM ${tableName}
     WHERE LOWER(TRIM(user_mail)) = LOWER(?)
-    ORDER BY date DESC
+    ORDER BY date DESC, insert_id DESC
   `;
   params = [userMail];
 }
@@ -2172,7 +2172,7 @@ else if (department === "Anti_Money_Laundering") {
 
   }
 
-  sql += " ORDER BY date DESC";
+  sql += " ORDER BY date DESC, insert_id DESC";
 
   db.query(sql, params, (err, rows) => {
 
