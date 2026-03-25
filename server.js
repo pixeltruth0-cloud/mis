@@ -899,17 +899,17 @@ if (
 "investment_scam_scrap",
 "IS_App",
 "remark",
-"Investment_Scam",
-"Additional_Information_1",
+"Investment_Scam"
+];
+
+/*   "Additional_Information_1",
 "Additional_Information_2",
 "Additional_Information_3",
 "Additional_Information_4",
 "Additional_Information_5",
 "Additional_Information_6",
 "Additional_Information_7",
-"Additional_Information_8"
-
-];
+"Additional_Information_8" */
 
   const values = allowedColumns.map(col => {
 
