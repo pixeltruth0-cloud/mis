@@ -112,6 +112,10 @@ const selectedRole = Role.trim().toLowerCase();
 
 
 if (!roles.includes(selectedRole)) {
+  console.log("DB Role:", user.Role);
+  console.log("Roles Array:", roles);
+  console.log("Selected Role:", selectedRole);
+
   return res.json({
     success: false,
     message: "Invalid role selected"
