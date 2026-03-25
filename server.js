@@ -103,15 +103,17 @@ app.post("/login", (req, res) => {
       return res.json({ success: false, message: "Invalid credentials" });
     }
 
-  const user = rows[0]; 
+const user = rows[0];
+
+// ✅ CLEAN ROLES (NO LOWERCASE)
 const roles = user.Role
   .split(",")
-  .map(r => r.trim().toLowerCase());
+  .map(r => r.trim());
 
-const selectedRole = Role.trim().toLowerCase();
+// ✅ SELECTED ROLE
+const selectedRole = Role.trim();
 
-
-
+// ✅ VALIDATION
 if (!roles.includes(selectedRole)) {
   console.log("DB Role:", user.Role);
   console.log("Roles Array:", roles);
