@@ -170,7 +170,7 @@ else if (roles.includes("HR")) {
   redirectUrl = `${BASE_URL}/HR/${Department}/HR_dashboard.html`;
 }
 
-else if (selectedRole === "admin") {
+else if (selectedRole === "Admin") {
   redirectUrl = `${BASE_URL}/Admin/${Department}/Admin_dashboard.html`;
 }
 
