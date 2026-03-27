@@ -1496,10 +1496,30 @@ else if (department.toLowerCase() === "anti_money_laundering") {
   return;
 }
 
-        const columns = Object.keys(row)
-  .filter(col => col && col.trim() !== "");
+const columns = Object.keys(row)
+  .filter(col => col && col.trim() !== "")
+  .filter(col => !["insert_id", "created_at"].includes(col));
 
-const values = columns.map(col => row[col]);
+const values = columns.map(col => {
+
+  let val = row[col];
+
+  // ✅ number safe convert
+  if (
+    col.toLowerCase().includes("hours") ||
+    col.toLowerCase().includes("minutes") ||
+    col.toLowerCase().includes("count")
+  ) {
+    return val ? Number(val) || 0 : 0;
+  }
+
+  // ✅ string clean
+  if (typeof val === "string") {
+    return val.trim();
+  }
+
+  return val || "";
+});
 
         const insertSql = `
           INSERT INTO ${tableName}
