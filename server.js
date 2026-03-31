@@ -75,6 +75,17 @@ app.get("/", (req, res) => {
 });
 
 /* ======================
+   SESSION CHECK API ✅
+====================== */
+
+app.get("/api/check-session", (req, res) => {
+  if (req.session && req.session.user) {
+    res.json({ loggedIn: true });
+  } else {
+    res.json({ loggedIn: false });
+  }
+});
+/* ======================
    GET LOGGED IN USER INFO
 ====================== */
 
