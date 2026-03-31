@@ -3,7 +3,7 @@ const session = require("express-session");
 const mysql = require("mysql2");
 const cors = require("cors");
 const multer = require("multer");
-
+const helmet = require("helmet");
 
 const app = express();
 const upload = multer();
@@ -11,6 +11,7 @@ const upload = multer();
 /* ======================
    Middleware
 ====================== */
+app.use(helmet()); 
 app.use(cors({
   origin: "https://pixeltruth.com",
   credentials: true
