@@ -19,7 +19,7 @@ app.use(cors({
 app.set("trust proxy", 1);
 
 
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = true;
 
 app.use(session({
   name: "pixeltruth.sid",
@@ -27,12 +27,12 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   proxy: true,
- cookie: {
-  secure: isProduction,
-  sameSite: isProduction ? "none" : "lax",
-  httpOnly: true,
-  maxAge: 1000 * 60 * 60 * 24
-}
+  cookie: {
+    secure: true,
+    sameSite: "none",
+    httpOnly: true,
+    maxAge: 1000 * 60 * 60 * 24
+  }
 }));
 
  // simple CORS (no credentials)
