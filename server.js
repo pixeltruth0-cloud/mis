@@ -892,7 +892,7 @@ if (
 "user_mail",
 "department",
 "date",
-"Attendence",   // ✅ ADD THIS
+"Attendance",   // ✅ ADD THIS
 
 "Daily_Cases",
 "Multiple_Cases",
