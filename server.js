@@ -915,7 +915,7 @@ if (
 "Credential_Making",
 
 "UPI_Fraud",
-"investment_web_case",
+"investment_sm_case",
 "investment_scam_case",
 "investment_scam_scrap",
 "IS_App",
