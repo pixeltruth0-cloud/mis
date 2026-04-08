@@ -2489,70 +2489,113 @@ app.get("/getMissedDays", (req, res) => {
 
   const { department, from, to } = req.query;
 
-  if (!department || !from || !to) {
+  if (!from || !to) {
     return res.json({ success:false, message:"Missing params" });
   }
 
   /* =========================
-     🔥 TABLE DETECTION
+     🔥 SUPER ADMIN MODE
   ========================= */
 
-  let tableName = "";
-
-  if (department === "Social_Media_N_Website_Audit") {
-    tableName = "social_media_n_website_audit_data";
-  }
-  else if (department === "Media_Monitoring") {
-    tableName = "media_monitoring_data";
-  }
-  else if (department === "Brand_Infringement") {
-    tableName = "brand_infringement";
-  }
-  else if (department === "Anti_Money_Laundering") {
-    tableName = "anti_money_laundering_data";
-  }
-  else {
-    return res.json({ success:false, message:"Invalid department" });
-  }
+  const isAll = !department || department === "ALL";
 
   /* =========================
-     1️⃣ USERS GET KARO
+     🔥 DATA QUERY (ALL TABLES)
   ========================= */
 
-  const userSql = `
-    SELECT User_Name, User_Mail
-    FROM mis_user_data
-    WHERE is_archived = 0
-      AND Role NOT LIKE '%HR%'
-      AND Role NOT LIKE '%Admin%'
-      AND Role NOT LIKE '%Team_Lead%'
-      AND Role NOT LIKE '%Director%'
-      AND Role NOT LIKE '%HR Manager%'
-      AND LOWER(TRIM(Department)) = LOWER(?)
-  `;
+  let dataSql = "";
+  let params = [];
 
-  db.query(userSql, [department], (err, users) => {
+  if (isAll) {
 
-    if (err) return res.json({ success:false });
+    dataSql = `
+      SELECT user_name, user_mail, date FROM social_media_n_website_audit_data
+      WHERE DATE(date) BETWEEN ? AND ?
 
-    /* =========================
-       2️⃣ DATA FETCH (FIXED)
-    ========================= */
+      UNION ALL
 
-    const dataSql = `
-      SELECT user_mail,
-      DATE(COALESCE(date, created_at)) as d
+      SELECT user_name, user_mail, date FROM media_monitoring_data
+      WHERE DATE(date) BETWEEN ? AND ?
+
+      UNION ALL
+
+      SELECT user_name, user_mail, date FROM brand_infringement
+      WHERE DATE(date) BETWEEN ? AND ?
+
+      UNION ALL
+
+      SELECT user_name, user_mail, date FROM anti_money_laundering_data
+      WHERE DATE(date) BETWEEN ? AND ?
+    `;
+
+    params = [from,to, from,to, from,to, from,to];
+
+  } else {
+
+    let tableName = "";
+
+    if (department === "Social_Media_N_Website_Audit") {
+      tableName = "social_media_n_website_audit_data";
+    }
+    else if (department === "Media_Monitoring") {
+      tableName = "media_monitoring_data";
+    }
+    else if (department === "Brand_Infringement") {
+      tableName = "brand_infringement";
+    }
+    else if (department === "Anti_Money_Laundering") {
+      tableName = "anti_money_laundering_data";
+    }
+    else {
+      return res.json({ success:false, message:"Invalid department" });
+    }
+
+    dataSql = `
+      SELECT user_name, user_mail,
+      DATE(COALESCE(date, created_at)) as date
       FROM ${tableName}
       WHERE LOWER(TRIM(department)) = LOWER(?)
         AND DATE(COALESCE(date, created_at)) BETWEEN ? AND ?
     `;
 
-    db.query(dataSql, [department, from, to], (err2, rows) => {
+    params = [department, from, to];
+  }
+
+  db.query(dataSql, params, (err, rows) => {
+
+    if (err) {
+      console.error(err);
+      return res.json({ success:false });
+    }
+
+    /* =========================
+       🔥 USERS LIST
+    ========================= */
+
+    let userSql = `
+      SELECT User_Name, User_Mail
+      FROM mis_user_data
+      WHERE is_archived = 0
+        AND Role NOT LIKE '%HR%'
+        AND Role NOT LIKE '%Admin%'
+        AND Role NOT LIKE '%Team_Lead%'
+        AND Role NOT LIKE '%Director%'
+        AND Role NOT LIKE '%HR Manager%'
+    `;
+
+    let userParams = [];
+
+    if (!isAll) {
+      userSql += " AND LOWER(TRIM(Department)) = LOWER(?)";
+      userParams.push(department);
+    }
+
+    db.query(userSql, userParams, (err2, users) => {
 
       if (err2) return res.json({ success:false });
 
       /* =========================
-         3️⃣ USER → FILLED DATES MAP
+         🔥 FILLED MAP
       ========================= */
 
       const mapDates = {};
@@ -2560,19 +2603,19 @@ app.get("/getMissedDays", (req, res) => {
       rows.forEach(r => {
 
         const mail = r.user_mail.toLowerCase();
-        const date = r.d;
+        const date = new Date(r.date).toISOString().split("T")[0];
 
-        if(!mapDates[mail]) mapDates[mail] = new Set();
+        if (!mapDates[mail]) mapDates[mail] = new Set();
         mapDates[mail].add(date);
 
       });
 
-      /* =========================
-         4️⃣ FINAL RESULT BUILD
-      ========================= */
-
       const start = new Date(from);
       const end = new Date(to);
+
+      /* =========================
+         🔥 FINAL RESULT (SAME UI LOGIC)
+      ========================= */
 
       const result = users.map(u => {
 
@@ -2581,11 +2624,11 @@ app.get("/getMissedDays", (req, res) => {
 
         const missedDates = [];
 
-        for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
 
           const dateStr = d.toISOString().split("T")[0];
 
-          if(!filledDates.has(dateStr)){
+          if (!filledDates.has(dateStr)) {
             missedDates.push(dateStr);
           }
 
@@ -2596,7 +2639,7 @@ app.get("/getMissedDays", (req, res) => {
           user_mail: u.User_Mail,
           filled_days: filledDates.size,
           missed_days: missedDates.length,
-          missed_dates: missedDates   // 🔥 frontend ke liye
+          missed_dates: missedDates
         };
 
       });
