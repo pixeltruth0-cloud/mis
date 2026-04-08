@@ -2511,40 +2511,68 @@ app.get("/getMissedDays", (req, res) => {
     return res.json({ success:false });
   }
 
-  // 🔥 get all dates with entries
-  const sql = `
-    SELECT DISTINCT DATE(COALESCE(date, created_at)) as d
-    FROM ${tableName}
-    WHERE LOWER(TRIM(department)) = LOWER(?)
-      AND DATE(COALESCE(date, created_at)) BETWEEN ? AND ?
+  /* =========================
+     🔥 USERS LIST
+  ========================= */
+  const userSql = `
+    SELECT User_Name, User_Mail
+    FROM mis_user_data
+    WHERE is_archived = 0
+      AND Role NOT LIKE '%HR%'
+      AND Role NOT LIKE '%Admin%'
+      AND Role NOT LIKE '%Team_Lead%'
+      AND Role NOT LIKE '%Director%'
+      AND Role NOT LIKE '%HR Manager%'
+      AND LOWER(TRIM(Department)) = LOWER(?)
   `;
 
-  db.query(sql, [department, from, to], (err, rows) => {
+  db.query(userSql, [department], (err, users) => {
 
     if (err) return res.json({ success:false });
 
-    const filledDates = new Set(
-      rows.map(r => r.d)
-    );
+    /* =========================
+       🔥 USER-WISE COUNT
+    ========================= */
 
-    const start = new Date(from);
-    const end = new Date(to);
+    const sql = `
+      SELECT user_mail, COUNT(DISTINCT DATE(date)) as filled_days
+      FROM ${tableName}
+      WHERE LOWER(TRIM(department)) = LOWER(?)
+        AND DATE(date) BETWEEN ? AND ?
+      GROUP BY user_mail
+    `;
 
-    const missed = [];
+    db.query(sql, [department, from, to], (err2, rows) => {
 
-    for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
+      if (err2) return res.json({ success:false });
 
-      const dateStr = d.toISOString().split("T")[0];
+      const totalDays =
+        Math.ceil((new Date(to) - new Date(from)) / (1000*60*60*24)) + 1;
 
-      if(!filledDates.has(dateStr)){
-        missed.push(dateStr);
-      }
+      const map = {};
+      rows.forEach(r => {
+        map[r.user_mail] = r.filled_days;
+      });
 
-    }
+      const result = users.map(u => {
 
-    res.json({
-      success:true,
-      missed
+        const filled = map[u.User_Mail] || 0;
+        const missed = totalDays - filled;
+
+        return {
+          user_name: u.User_Name,
+          user_mail: u.User_Mail,
+          filled_days: filled,
+          missed_days: missed
+        };
+
+      });
+
+      res.json({
+        success:true,
+        data: result
+      });
+
     });
 
   });
