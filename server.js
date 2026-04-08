@@ -2493,10 +2493,6 @@ app.get("/getMissedDays", (req, res) => {
     return res.json({ success:false, message:"Missing params" });
   }
 
-  /* =========================
-     🔥 TABLE DETECTION
-  ========================= */
-
   let tableName = "";
 
   if (department === "Social_Media_N_Website_Audit") {
@@ -2512,88 +2508,43 @@ app.get("/getMissedDays", (req, res) => {
     tableName = "anti_money_laundering_data";
   }
   else {
-    return res.json({ success:false, message:"Invalid department" });
+    return res.json({ success:false });
   }
 
-  /* =========================
-     1️⃣ USERS GET KARO
-  ========================= */
-
-  const userSql = `
-    SELECT User_Name, User_Mail
-    FROM mis_user_data
-    WHERE is_archived = 0
-      AND Role NOT LIKE '%HR%'
-      AND Role NOT LIKE '%Admin%'
-      AND Role NOT LIKE '%Team_Lead%'
-      AND Role NOT LIKE '%Director%'
-      AND Role NOT LIKE '%HR Manager%'
-      AND LOWER(TRIM(Department)) = LOWER(?)
+  // 🔥 get all dates with entries
+  const sql = `
+    SELECT DISTINCT DATE(COALESCE(date, created_at)) as d
+    FROM ${tableName}
+    WHERE LOWER(TRIM(department)) = LOWER(?)
+      AND DATE(COALESCE(date, created_at)) BETWEEN ? AND ?
   `;
 
-  db.query(userSql, [department], (err, users) => {
+  db.query(sql, [department, from, to], (err, rows) => {
 
     if (err) return res.json({ success:false });
 
-    /* =========================
-       2️⃣ DATA FETCH KARO (FIXED)
-    ========================= */
+    const filledDates = new Set(
+      rows.map(r => r.d)
+    );
 
-    const dataSql = `
-      SELECT user_mail, 
-      DATE(COALESCE(date, created_at)) as d
-      FROM ${tableName}
-      WHERE LOWER(TRIM(department)) = LOWER(?)
-        AND DATE(COALESCE(date, created_at)) BETWEEN ? AND ?
-    `;
+    const start = new Date(from);
+    const end = new Date(to);
 
-    db.query(dataSql, [department, from, to], (err2, rows) => {
+    const missed = [];
 
-      if (err2) return res.json({ success:false });
+    for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
 
-      const dataMap = {};
+      const dateStr = d.toISOString().split("T")[0];
 
-      rows.forEach(r=>{
-        const key = r.d + "_" + r.user_mail.toLowerCase();
-        dataMap[key] = true;
-      });
-
-      /* =========================
-         3️⃣ USER-WISE MISSED LOGIC
-      ========================= */
-
-      const start = new Date(from);
-      const end = new Date(to);
-
-      const missed = {};
-
-      for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
-
-        const dateStr = d.toISOString().split("T")[0];
-
-        users.forEach(u=>{
-
-          const key = dateStr + "_" + u.User_Mail.toLowerCase();
-
-          if(!dataMap[key]){
-
-            if(!missed[u.User_Name]){
-              missed[u.User_Name] = [];
-            }
-
-            missed[u.User_Name].push(dateStr);
-
-          }
-
-        });
-
+      if(!filledDates.has(dateStr)){
+        missed.push(dateStr);
       }
 
-      res.json({
-        success:true,
-        missed
-      });
+    }
 
+    res.json({
+      success:true,
+      missed
     });
 
   });
