@@ -2536,14 +2536,15 @@ app.get("/getMissedDays", (req, res) => {
     if (err) return res.json({ success:false });
 
     /* =========================
-       2️⃣ DATA FETCH KARO
+       2️⃣ DATA FETCH KARO (FIXED)
     ========================= */
 
     const dataSql = `
-      SELECT user_mail, DATE(date) as d
+      SELECT user_mail, 
+      DATE(COALESCE(date, created_at)) as d
       FROM ${tableName}
       WHERE LOWER(TRIM(department)) = LOWER(?)
-        AND DATE(date) BETWEEN ? AND ?
+        AND DATE(COALESCE(date, created_at)) BETWEEN ? AND ?
     `;
 
     db.query(dataSql, [department, from, to], (err2, rows) => {
@@ -2553,12 +2554,12 @@ app.get("/getMissedDays", (req, res) => {
       const dataMap = {};
 
       rows.forEach(r=>{
-        const key = r.d + "_" + r.user_mail;
+        const key = r.d + "_" + r.user_mail.toLowerCase();
         dataMap[key] = true;
       });
 
       /* =========================
-         3️⃣ DATE LOOP
+         3️⃣ USER-WISE MISSED LOGIC
       ========================= */
 
       const start = new Date(from);
@@ -2572,13 +2573,16 @@ app.get("/getMissedDays", (req, res) => {
 
         users.forEach(u=>{
 
-          const key = dateStr + "_" + u.User_Mail;
+          const key = dateStr + "_" + u.User_Mail.toLowerCase();
 
           if(!dataMap[key]){
 
-            if(!missed[dateStr]) missed[dateStr] = [];
+            if(!missed[u.User_Name]){
+              missed[u.User_Name] = [];
+            }
 
-            missed[dateStr].push(u.User_Name);
+            missed[u.User_Name].push(dateStr);
+
           }
 
         });
