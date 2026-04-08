@@ -2483,6 +2483,118 @@ app.get("/getSuperAdminRawData", (req, res) => {
   });
 
 });
+app.get("/getMissedDays", (req, res) => {
+
+  if (!db) return res.json({ success:false });
+
+  const { department, from, to } = req.query;
+
+  if (!department || !from || !to) {
+    return res.json({ success:false, message:"Missing params" });
+  }
+
+  /* =========================
+     🔥 TABLE DETECTION
+  ========================= */
+
+  let tableName = "";
+
+  if (department === "Social_Media_N_Website_Audit") {
+    tableName = "social_media_n_website_audit_data";
+  }
+  else if (department === "Media_Monitoring") {
+    tableName = "media_monitoring_data";
+  }
+  else if (department === "Brand_Infringement") {
+    tableName = "brand_infringement";
+  }
+  else if (department === "Anti_Money_Laundering") {
+    tableName = "anti_money_laundering_data";
+  }
+  else {
+    return res.json({ success:false, message:"Invalid department" });
+  }
+
+  /* =========================
+     1️⃣ USERS GET KARO
+  ========================= */
+
+  const userSql = `
+    SELECT User_Name, User_Mail
+    FROM mis_user_data
+    WHERE is_archived = 0
+      AND Role NOT LIKE '%HR%'
+      AND Role NOT LIKE '%Admin%'
+      AND Role NOT LIKE '%Team_Lead%'
+      AND Role NOT LIKE '%Director%'
+      AND Role NOT LIKE '%HR Manager%'
+      AND LOWER(TRIM(Department)) = LOWER(?)
+  `;
+
+  db.query(userSql, [department], (err, users) => {
+
+    if (err) return res.json({ success:false });
+
+    /* =========================
+       2️⃣ DATA FETCH KARO
+    ========================= */
+
+    const dataSql = `
+      SELECT user_mail, DATE(date) as d
+      FROM ${tableName}
+      WHERE LOWER(TRIM(department)) = LOWER(?)
+        AND DATE(date) BETWEEN ? AND ?
+    `;
+
+    db.query(dataSql, [department, from, to], (err2, rows) => {
+
+      if (err2) return res.json({ success:false });
+
+      const dataMap = {};
+
+      rows.forEach(r=>{
+        const key = r.d + "_" + r.user_mail;
+        dataMap[key] = true;
+      });
+
+      /* =========================
+         3️⃣ DATE LOOP
+      ========================= */
+
+      const start = new Date(from);
+      const end = new Date(to);
+
+      const missed = {};
+
+      for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
+
+        const dateStr = d.toISOString().split("T")[0];
+
+        users.forEach(u=>{
+
+          const key = dateStr + "_" + u.User_Mail;
+
+          if(!dataMap[key]){
+
+            if(!missed[dateStr]) missed[dateStr] = [];
+
+            missed[dateStr].push(u.User_Name);
+          }
+
+        });
+
+      }
+
+      res.json({
+        success:true,
+        missed
+      });
+
+    });
+
+  });
+
+});
 /* ======================
    Server Start
 ====================== */
