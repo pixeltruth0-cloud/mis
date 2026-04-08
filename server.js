@@ -2493,6 +2493,10 @@ app.get("/getMissedDays", (req, res) => {
     return res.json({ success:false, message:"Missing params" });
   }
 
+  /* =========================
+     🔥 TABLE DETECTION
+  ========================= */
+
   let tableName = "";
 
   if (department === "Social_Media_N_Website_Audit") {
@@ -2508,12 +2512,13 @@ app.get("/getMissedDays", (req, res) => {
     tableName = "anti_money_laundering_data";
   }
   else {
-    return res.json({ success:false });
+    return res.json({ success:false, message:"Invalid department" });
   }
 
   /* =========================
-     🔥 USERS LIST
+     1️⃣ USERS GET KARO
   ========================= */
+
   const userSql = `
     SELECT User_Name, User_Mail
     FROM mis_user_data
@@ -2531,39 +2536,67 @@ app.get("/getMissedDays", (req, res) => {
     if (err) return res.json({ success:false });
 
     /* =========================
-       🔥 USER-WISE COUNT
+       2️⃣ DATA FETCH (FIXED)
     ========================= */
 
-    const sql = `
-      SELECT user_mail, COUNT(DISTINCT DATE(date)) as filled_days
+    const dataSql = `
+      SELECT user_mail,
+      DATE(COALESCE(date, created_at)) as d
       FROM ${tableName}
       WHERE LOWER(TRIM(department)) = LOWER(?)
-        AND DATE(date) BETWEEN ? AND ?
-      GROUP BY user_mail
+        AND DATE(COALESCE(date, created_at)) BETWEEN ? AND ?
     `;
 
-    db.query(sql, [department, from, to], (err2, rows) => {
+    db.query(dataSql, [department, from, to], (err2, rows) => {
 
       if (err2) return res.json({ success:false });
 
-      const totalDays =
-        Math.ceil((new Date(to) - new Date(from)) / (1000*60*60*24)) + 1;
+      /* =========================
+         3️⃣ USER → FILLED DATES MAP
+      ========================= */
 
-      const map = {};
+      const mapDates = {};
+
       rows.forEach(r => {
-        map[r.user_mail] = r.filled_days;
+
+        const mail = r.user_mail.toLowerCase();
+        const date = r.d;
+
+        if(!mapDates[mail]) mapDates[mail] = new Set();
+        mapDates[mail].add(date);
+
       });
+
+      /* =========================
+         4️⃣ FINAL RESULT BUILD
+      ========================= */
+
+      const start = new Date(from);
+      const end = new Date(to);
 
       const result = users.map(u => {
 
-        const filled = map[u.User_Mail] || 0;
-        const missed = totalDays - filled;
+        const mail = u.User_Mail.toLowerCase();
+        const filledDates = mapDates[mail] || new Set();
+
+        const missedDates = [];
+
+        for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
+
+          const dateStr = d.toISOString().split("T")[0];
+
+          if(!filledDates.has(dateStr)){
+            missedDates.push(dateStr);
+          }
+
+        }
 
         return {
           user_name: u.User_Name,
           user_mail: u.User_Mail,
-          filled_days: filled,
-          missed_days: missed
+          filled_days: filledDates.size,
+          missed_days: missedDates.length,
+          missed_dates: missedDates   // 🔥 frontend ke liye
         };
 
       });
