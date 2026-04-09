@@ -703,7 +703,6 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 "Banking_Remark",
 "Banking_hours",
 "Banking_minutes",
-"Banking_Rotation",
 
 "Finance_Type_Of_Work",
 "Finance_Brand",
@@ -714,8 +713,7 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 "Finance_Remark",
 "Finance_hours",
 "Finance_minutes",
-"Finance_Rotation",
-
+     
 "Trading_Type_Of_Work",
 "Trading_Brand",
 "Trading_Channel",
@@ -725,13 +723,14 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 "Trading_Remark",
 "Trading_hours",
 "Trading_minutes",
-"Trading_Rotation",
+
 
 "POC_Type_Of_Work",
 "POC_Brand",
 "POC_Other_Brand",
 "POC_Channel",
 "POC_Sub_Channel",
+"POC_Categories",
 "POC_Count",
 "POC_hours",
 "POC_minutes",
