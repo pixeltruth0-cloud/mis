@@ -919,7 +919,7 @@ if (
 "investment_scam_scrap",
 "IS_App",
 "remark",
-"Investment_Scam"
+"Total_case"
 ];
 
 /*   "Additional_Information_1",
