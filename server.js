@@ -691,6 +691,7 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 "user_name",
 "user_mail",
 "department",
+"role",    
 "date",
 "rotation",
 
