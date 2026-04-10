@@ -686,7 +686,7 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 
   });
 
-  const allowedColumns = [
+ const allowedColumns = [
 
 "user_name",
 "user_mail",
@@ -694,37 +694,18 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 "date",
 "rotation",
 
-"Banking_Type_Of_Work",
-"Banking_Brand",
-"Banking_Channel",
-"Banking_Sub_Channel",
-"Banking_Categories",
-"Banking_Count",
-"Banking_Remark",
-"Banking_hours",
-"Banking_minutes",
+/* LIVE CUSTOMER */
+"LiveCustomer_Type_Of_Work",
+"LiveCustomer_Brand",
+"LiveCustomer_Channel",
+"LiveCustomer_Sub_Channel",
+"LiveCustomer_Categories",
+"LiveCustomer_Count",
+"LiveCustomer_hours",
+"LiveCustomer_minutes",
+"LiveCustomer_Remark",
 
-"Finance_Type_Of_Work",
-"Finance_Brand",
-"Finance_Channel",
-"Finance_Sub_Channel",
-"Finance_Categories",
-"Finance_Count",
-"Finance_Remark",
-"Finance_hours",
-"Finance_minutes",
-     
-"Trading_Type_Of_Work",
-"Trading_Brand",
-"Trading_Channel",
-"Trading_Sub_Channel",
-"Trading_Categories",
-"Trading_Count",
-"Trading_Remark",
-"Trading_hours",
-"Trading_minutes",
-
-
+/* POC */
 "POC_Type_Of_Work",
 "POC_Brand",
 "POC_Other_Brand",
