@@ -2131,29 +2131,36 @@ app.get("/getSummary", (req, res) => {
   }
 
   /* ==========================
-     🔥 DYNAMIC TABLE MAPPING
+     🔥 NORMALIZE DEPARTMENT
   ========================== */
+
+  const dept = department.trim();
 
   let tableName = "";
 
-  if (department === "Social_Media_N_Website_Audit") {
+  if (dept === "Social_Media_N_Website_Audit") {
     tableName = "social_media_n_website_audit_data";
   }
-  else if (department === "Brand_Infringement") {
+  else if (dept === "Brand_Infringement") {
     tableName = "brand_infringement";
   }
-  else if (department === "Media_Monitoring") {
+  else if (dept === "Media_Monitoring") {
     tableName = "media_monitoring_data";
   }
-else if (department === "Anti_Money_Laundering") {
-  tableName = "anti_money_laundering_data";
-}
+  else if (dept === "Anti_Money_Laundering") {
+    tableName = "anti_money_laundering_data";
+  }
   else {
     return res.json({ success:false, message:"Invalid department" });
   }
 
-  let sql = `SELECT * FROM ${tableName} WHERE department = ?`;
-  let params = [department];
+  /* ==========================
+     🔥 MAIN QUERY (FIXED)
+     ❌ removed department filter
+  ========================== */
+
+  let sql = `SELECT * FROM ${tableName}`;
+  let params = [];
 
   /* ==============================
      DATE RANGE / TYPE FILTER
@@ -2161,19 +2168,22 @@ else if (department === "Anti_Money_Laundering") {
 
   if (from && to) {
 
-    sql += " AND DATE(date) BETWEEN ? AND ?";
+    sql += " WHERE DATE(date) BETWEEN ? AND ?";
     params.push(from, to);
 
-  } else if (type) {
+  } 
+  else if (type) {
+
+    sql += " WHERE ";
 
     if (type === "day") {
-      sql += " AND DATE(date) = CURDATE()";
+      sql += "DATE(date) = CURDATE()";
     }
     else if (type === "week") {
-      sql += " AND YEARWEEK(date, 1) = YEARWEEK(CURDATE(), 1)";
+      sql += "YEARWEEK(date, 1) = YEARWEEK(CURDATE(), 1)";
     }
     else if (type === "month") {
-      sql += " AND MONTH(date) = MONTH(CURDATE()) AND YEAR(date) = YEAR(CURDATE())";
+      sql += "MONTH(date) = MONTH(CURDATE()) AND YEAR(date) = YEAR(CURDATE())";
     }
     else {
       return res.json({ success:false, message:"Invalid type" });
@@ -2181,7 +2191,21 @@ else if (department === "Anti_Money_Laundering") {
 
   }
 
-  sql += " ORDER BY date DESC, insert_id DESC";
+  /* ==========================
+     🔥 ORDER BY FIX
+  ========================== */
+
+  let orderColumn = "insert_id";
+
+  if (tableName === "brand_infringement") {
+    orderColumn = "id";
+  }
+
+  sql += ` ORDER BY date DESC, ${orderColumn} DESC`;
+
+  /* ==========================
+     🔥 EXECUTE QUERY
+  ========================== */
 
   db.query(sql, params, (err, rows) => {
 
@@ -2205,7 +2229,7 @@ else if (department === "Anti_Money_Laundering") {
           totalMinutes += Number(row[key] || 0);
         }
 
-        // ✅ Media Monitoring style (hours/minutes)
+        // ✅ Media Monitoring style
         if (key === "hours") {
           totalMinutes += Number(row[key] || 0) * 60;
         }
