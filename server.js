@@ -1588,6 +1588,9 @@ else if (dept === "anti_money_laundering") {
 /* ======================
    UPDATE DEPARTMENT DATA
 ====================== */
+/* ======================
+   UPDATE DEPARTMENT DATA (FINAL FIXED)
+====================== */
 app.post("/updateDepartmentData", (req, res) => {
 
   if (!db) return res.json({ success: false });
@@ -1605,9 +1608,9 @@ app.post("/updateDepartmentData", (req, res) => {
   let tableName = "";
   let idColumn = "insert_id";
 
-  // ======================
-  // TABLE MAPPING
-  // ======================
+  /* ======================
+     TABLE MAPPING
+  ====================== */
 
   if (dept === "social_media_n_website_audit") {
     tableName = "social_media_n_website_audit_data";
@@ -1626,9 +1629,9 @@ app.post("/updateDepartmentData", (req, res) => {
     return res.json({ success: false, message: "Invalid department" });
   }
 
-  // ======================
-  // 🔥 DB BASED COLUMN CHECK
-  // ======================
+  /* ======================
+     🔥 SAFE COLUMN CHECK (DB BASED)
+  ====================== */
 
   const checkColumnSql = `
     SELECT COLUMN_NAME 
@@ -1648,13 +1651,13 @@ app.post("/updateDepartmentData", (req, res) => {
     if (!columnList.includes(column)) {
       return res.json({
         success: false,
-        message: "Invalid column (not in DB)"
+        message: "Invalid column"
       });
     }
 
-    // ======================
-    // UPDATE QUERY
-    // ======================
+    /* ======================
+       UPDATE QUERY
+    ====================== */
 
     const sql = `
       UPDATE ${tableName}
@@ -1670,31 +1673,10 @@ app.post("/updateDepartmentData", (req, res) => {
       }
 
       console.log("✅ UPDATED SUCCESS");
+
       res.json({ success: true });
 
     });
-
-  });
-
-});
-  /* ======================
-     UPDATE QUERY
-  ====================== */
-
-  const sql = `
-    UPDATE ${tableName}
-    SET ${column} = ?
-    WHERE ${idColumn} = ?
-  `;
-
-  db.query(sql, [value, id], (err) => {
-
-    if (err) {
-      console.error("❌ updateDepartmentData error:", err.message);
-      return res.json({ success: false });
-    }
-
-    res.json({ success: true });
 
   });
 
