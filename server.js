@@ -1594,8 +1594,10 @@ app.post("/updateDepartmentData", (req, res) => {
 
   const { id, column, value, department } = req.body;
 
+  console.log("UPDATE HIT:", { id, column, value, department });
+
   if (!id || !column || !department) {
-    return res.json({ success: false });
+    return res.json({ success: false, message: "Missing data" });
   }
 
   const dept = department.toLowerCase().trim();
@@ -1603,111 +1605,78 @@ app.post("/updateDepartmentData", (req, res) => {
   let tableName = "";
   let idColumn = "insert_id";
 
-  /* ======================
-     TABLE MAPPING
-  ====================== */
+  // ======================
+  // TABLE MAPPING
+  // ======================
 
   if (dept === "social_media_n_website_audit") {
     tableName = "social_media_n_website_audit_data";
-    idColumn = "insert_id";
   }
-
   else if (dept === "media_monitoring") {
     tableName = "media_monitoring_data";
-    idColumn = "insert_id";
   }
-
   else if (dept === "brand_infringement") {
     tableName = "brand_infringement";
     idColumn = "id";
   }
-
   else if (dept === "anti_money_laundering") {
     tableName = "anti_money_laundering_data";
-    idColumn = "insert_id";
   }
-
   else {
     return res.json({ success: false, message: "Invalid department" });
   }
 
-  /* ======================
-     ALLOWED COLUMNS
-  ====================== */
+  // ======================
+  // 🔥 DB BASED COLUMN CHECK
+  // ======================
 
-  const allowedColumns = [
+  const checkColumnSql = `
+    SELECT COLUMN_NAME 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE TABLE_NAME = ?
+  `;
 
-    "rotation",
+  db.query(checkColumnSql, [tableName], (err, columns) => {
 
-    "Website_Audit_Type_Of_Work",
-    "Website_Audit_Brand",
-    "Website_Audit_Type_Of_Task",
-    "Website_Audit_hours",
-    "Website_Audit_minutes",
-    "Website_Audit_Remark",
-    "Website_Audit_Status",
+    if (err) {
+      console.error("❌ Column check error:", err.message);
+      return res.json({ success: false });
+    }
 
-    "Social_Media_Audit_Type_Of_Work",
-    "Social_Media_Audit_Brand",
-    "Social_Media_Audit_Type_Of_Task",
-    "Social_Media_Audit_hours",
-    "Social_Media_Audit_minutes",
-    "Social_Media_Audit_Remark",
-    "Social_Media_Audit_Status",
+    const columnList = columns.map(c => c.COLUMN_NAME);
 
-    "Stationary_Type_Of_Work",
-    "Stationary_Brand",
-    "Stationary_Project",
-    "Stationary_Count",
-    "Stationary_hours",
-    "Stationary_minutes",
-    "Stationary_Remark",
+    if (!columnList.includes(column)) {
+      return res.json({
+        success: false,
+        message: "Invalid column (not in DB)"
+      });
+    }
 
-    "Real_Estate_Type_Of_Work",
-    "Real_Estate_Brand",
-    "Real_Estate_Categories",
-    "Real_Estate_Count",
-    "Real_Estate_hours",
-    "Real_Estate_minutes",
-    "Real_Estate_Remark",
+    // ======================
+    // UPDATE QUERY
+    // ======================
 
-    "Incent_Type_Of_Work",
-    "Incent_Brand",
-    "Incent_Count",
-    "Incent_Eastat_hours",
-    "Incent_Eastat_minutes",
-    "Incent_Remark",
+    const sql = `
+      UPDATE ${tableName}
+      SET ${column} = ?
+      WHERE ${idColumn} = ?
+    `;
 
-    "ITC_Cigarette_Type_Of_Work",
-    "ITC_Cigarette_Platform",
-    "ITC_Cigarette_Count",
-    "ITC_Cigarette_hours",
-    "ITC_Cigarette_minutes",
-    "ITC_Cigarette_Remark",
+    db.query(sql, [value, id], (err) => {
 
-    "Nicotine_Type_Of_Work",
-    "Nicotine_Platform",
-    "Nicotine_Count",
-    "Nicotine_hours",
-    "Nicotine_minutes",
-    "Nicotine_Remark",
+      if (err) {
+        console.error("❌ UPDATE ERROR:", err.message);
+        return res.json({ success: false, message: err.message });
+      }
 
-    "Shopee_Type_Of_Work",
-    "Shopee_Platform",
-    "Shopee_Count",
-    "Shopee_hours",
-    "Shopee_minutes",
-    "Shopee_Remark"
+      console.log("✅ UPDATED SUCCESS");
+      res.json({ success: true });
 
-  ];
-
-  if (!allowedColumns.includes(column)) {
-    return res.json({
-      success: false,
-      message: "Invalid column"
     });
-  }
 
+  });
+
+});
   /* ======================
      UPDATE QUERY
   ====================== */
