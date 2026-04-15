@@ -1108,7 +1108,7 @@ const roles = role.split(",").map(r => r.trim().toUpperCase().replace(/\s+/g, "_
   else if (dept === "anti_money_laundering") {
     tableName = "anti_money_laundering_data";
   }
-else if (dept === "brand_affiliate") {
+else if (dept === "brand_safety_affiliate" || dept === "brand_affiliate") {
   tableName = "brand_affiliate";
 }
   else {
@@ -1678,7 +1678,7 @@ app.post("/deleteDepartmentData", (req, res) => {
     tableName = "brand_infringement";
     idColumn = "id";
   }
-else if (dept === "brand_affiliate") {
+else if (dept === "brand_affiliate" || dept === "brand_safety_affiliate") {
   tableName = "brand_affiliate";
   idColumn = "id";
 }
@@ -1741,7 +1741,7 @@ app.post("/updateDepartmentData", (req, res) => {
     tableName = "brand_infringement";
     idColumn = "id";
   }
-else if (dept === "brand_affiliate") {
+else if (dept === "brand_affiliate" || dept === "brand_safety_affiliate") {
   tableName = "brand_affiliate";
   idColumn = "id";
 }
