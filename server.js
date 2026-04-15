@@ -707,7 +707,6 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 /* POC */
 "POC_Type_Of_Work",
 "POC_Brand",
-"POC_Other_Brand",
 "POC_Channel",
 "POC_Count",
 "POC_hours",
@@ -1581,9 +1580,6 @@ else if (dept === "anti_money_laundering") {
   });
 
 });
-/* ======================
-   UPDATE DEPARTMENT DATA
-====================== */
 /* ======================
    UPDATE DEPARTMENT DATA (FINAL FIXED)
 ====================== */
