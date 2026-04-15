@@ -1118,10 +1118,12 @@ else if (dept === "brand_safety_affiliate" || dept === "brand_affiliate") {
   let sql = "";
   let params = [];
 
-// 🔥 ADD THIS ABOVE (just before if block)
 let orderByColumn = "insert_id";
 
-if (tableName === "brand_infringement") {
+if (
+  tableName === "brand_infringement" ||
+  tableName === "brand_affiliate"
+) {
   orderByColumn = "id";
 }
 
