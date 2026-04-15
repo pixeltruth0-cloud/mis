@@ -751,6 +751,126 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 
 });
 /* ======================
+   BRAND AFFILIATE SUBMIT
+====================== */
+app.post("/submitBrandAffiliate", upload.none(), (req, res) => {
+
+  if (!db) {
+    return res.json({
+      success:false,
+      message:"Database not connected"
+    });
+  }
+
+  const rawData = req.body;
+  const data = {};
+
+  Object.keys(rawData).forEach(key => {
+
+    const cleanKey = key
+      .replace(/\[\]$/, '')
+      .replace(/\s+/g, "_");   // 🔥 space fix
+
+    if (Array.isArray(rawData[key])) {
+
+      if (
+        cleanKey.endsWith("_hours") ||
+        cleanKey.endsWith("_minutes") ||
+        cleanKey.endsWith("_Count")
+      ) {
+
+        data[cleanKey] = rawData[key]
+          .map(v => Number(v) || 0)
+          .reduce((a,b) => a+b,0);
+
+      } else {
+
+        data[cleanKey] = rawData[key].join(", ");
+
+      }
+
+    } else {
+
+      data[cleanKey] = rawData[key];
+
+    }
+
+  });
+
+  const allowedColumns = [
+
+    "user_name",
+    "user_mail",
+    "department",
+    "date",
+    "rotation",
+
+    /* LIVE CUSTOMER */
+    "Live_Customer_Type_Of_Work",
+    "Live_Customer_Brand",
+    "Live_Customer_Count",
+    "Live_Customer_Remark",
+    "Live_Customer_hours",
+    "Live_Customer_minutes",
+
+    /* POC */
+    "POC_Type_Of_Work",
+    "POC_Brand",
+    "POC_Count",
+    "POC_Remark",
+    "POC_hours",
+    "POC_minutes",
+
+    /* R&D */
+    "R_D_Type_Of_Work",
+    "R_D_Brand",
+    "R_D_Count",
+    "R_D_Remark",
+    "R_D_hours",
+    "R_D_minutes"
+
+  ];
+
+  const values = allowedColumns.map(col => {
+
+    if (
+      col.endsWith("_hours") ||
+      col.endsWith("_minutes") ||
+      col.endsWith("_Count")
+    ) {
+      return data[col] ? Number(data[col]) : 0;
+    }
+
+    return data[col] ? data[col] : "";
+  });
+
+  const placeholders = allowedColumns.map(()=>"?").join(",");
+
+  const sql = `
+    INSERT INTO brand_affiliate
+    (${allowedColumns.join(",")})
+    VALUES (${placeholders})
+  `;
+
+  db.query(sql, values, (err)=>{
+
+    if(err){
+      console.error("❌ Affiliate Insert Error:",err.message);
+      return res.json({
+        success:false,
+        message:err.message
+      });
+    }
+
+    res.json({
+      success:true,
+      message:"Brand Affiliate submitted successfully"
+    });
+
+  });
+
+});
+/* ======================
    MEDIA MONITORING SUBMIT
 ====================== */
 app.post("/submitMediaMonitoring", upload.none(), (req, res) => {
@@ -988,6 +1108,9 @@ const roles = role.split(",").map(r => r.trim().toUpperCase().replace(/\s+/g, "_
   else if (dept === "anti_money_laundering") {
     tableName = "anti_money_laundering_data";
   }
+else if (dept === "brand_affiliate") {
+  tableName = "brand_affiliate";
+}
   else {
     return res.json([]);
   }
@@ -1555,6 +1678,10 @@ app.post("/deleteDepartmentData", (req, res) => {
     tableName = "brand_infringement";
     idColumn = "id";
   }
+else if (dept === "brand_affiliate") {
+  tableName = "brand_affiliate";
+  idColumn = "id";
+}
 else if (dept === "anti_money_laundering") {
   tableName = "anti_money_laundering_data";
   idColumn = "insert_id";
@@ -1614,6 +1741,10 @@ app.post("/updateDepartmentData", (req, res) => {
     tableName = "brand_infringement";
     idColumn = "id";
   }
+else if (dept === "brand_affiliate") {
+  tableName = "brand_affiliate";
+  idColumn = "id";
+}
   else if (dept === "anti_money_laundering") {
     tableName = "anti_money_laundering_data";
   }
@@ -1946,6 +2077,8 @@ const submissionQuery = `
   SELECT DISTINCT user_mail FROM brand_infringement
   WHERE DATE(date) = ?
 
+UNION
+SELECT DISTINCT user_mail FROM brand_affiliate WHERE DATE(date)=?
   UNION
 
   SELECT DISTINCT user_mail FROM anti_money_laundering_data
