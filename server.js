@@ -757,19 +757,22 @@ app.post("/submitBrandAffiliate", upload.none(), (req, res) => {
 
   if (!db) {
     return res.json({
-      success:false,
-      message:"Database not connected"
+      success: false,
+      message: "Database not connected",
+      remainingHours: 0,
+      remainingMinutes: 0
     });
   }
 
   const rawData = req.body;
   const data = {};
 
+  // 🔥 CLEAN DATA
   Object.keys(rawData).forEach(key => {
 
     const cleanKey = key
       .replace(/\[\]$/, '')
-      .replace(/\s+/g, "_");   // 🔥 space fix
+      .replace(/\s+/g, "_");
 
     if (Array.isArray(rawData[key])) {
 
@@ -778,24 +781,21 @@ app.post("/submitBrandAffiliate", upload.none(), (req, res) => {
         cleanKey.endsWith("_minutes") ||
         cleanKey.endsWith("_Count")
       ) {
-
         data[cleanKey] = rawData[key]
           .map(v => Number(v) || 0)
-          .reduce((a,b) => a+b,0);
-
+          .reduce((a, b) => a + b, 0);
       } else {
-
         data[cleanKey] = rawData[key].join(", ");
-
       }
 
     } else {
-
       data[cleanKey] = rawData[key];
-
     }
 
   });
+
+  // 🔍 DEBUG (optional)
+  console.log("FINAL DATA:", data);
 
   const allowedColumns = [
 
@@ -838,13 +838,13 @@ app.post("/submitBrandAffiliate", upload.none(), (req, res) => {
       col.endsWith("_minutes") ||
       col.endsWith("_Count")
     ) {
-      return data[col] ? Number(data[col]) : 0;
+      return Number(data[col]) || 0;
     }
 
-    return data[col] ? data[col] : "";
+    return data[col] || "";
   });
 
-  const placeholders = allowedColumns.map(()=>"?").join(",");
+  const placeholders = allowedColumns.map(() => "?").join(",");
 
   const sql = `
     INSERT INTO brand_affiliate
@@ -852,19 +852,25 @@ app.post("/submitBrandAffiliate", upload.none(), (req, res) => {
     VALUES (${placeholders})
   `;
 
-  db.query(sql, values, (err)=>{
+  db.query(sql, values, (err) => {
 
-    if(err){
-      console.error("❌ Affiliate Insert Error:",err.message);
+    if (err) {
+      console.error("❌ Affiliate Insert Error:", err.message);
+
       return res.json({
-        success:false,
-        message:err.message
+        success: false,
+        message: err.message,
+        remainingHours: 0,
+        remainingMinutes: 0
       });
     }
 
-    res.json({
-      success:true,
-      message:"Brand Affiliate submitted successfully"
+    // ✅ FINAL SUCCESS RESPONSE (IMPORTANT FIX)
+    return res.json({
+      success: true,
+      message: "Brand Affiliate submitted successfully",
+      remainingHours: 0,
+      remainingMinutes: 0
     });
 
   });
