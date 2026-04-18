@@ -1168,7 +1168,17 @@ else {
 
     console.log("AML DATA COUNT:", rows.length);
 
-    res.json(rows);
+   const normalizedRows = rows.map(row => {
+  const newRow = {};
+
+  Object.keys(row).forEach(key => {
+    newRow[key.toLowerCase()] = row[key];
+  });
+
+  return newRow;
+});
+
+res.json(normalizedRows);
 
   });
 
