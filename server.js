@@ -1168,17 +1168,58 @@ else {
 
     console.log("AML DATA COUNT:", rows.length);
 
-   const normalizedRows = rows.map(row => {
-  const newRow = {};
+    res.json(rows);
 
-  Object.keys(row).forEach(key => {
-    newRow[key.toLowerCase()] = row[key];
   });
 
-  return newRow;
 });
 
-res.json(normalizedRows);
+/* ======================
+   UPDATE MEDIA MONITORING DATA
+====================== */
+app.post("/updateMediaMonitoringData", (req, res) => {
+
+  if (!db) return res.json({ success: false });
+
+  const { id, column, value } = req.body;
+
+  if (!id || !column) {
+    return res.json({ success: false });
+  }
+
+  // 🔒 Allowed editable columns
+  const allowedColumns = [
+    "project",
+    "sub_project",
+    "brand",
+    "platform",
+    "type_of_work",
+    "rotation",
+    "work_count",
+    "remark",
+    "hours",
+    "minutes",
+    "date"
+  ];
+
+  if (!allowedColumns.includes(column)) {
+    return res.json({ success: false, message: "Invalid column" });
+  }
+
+  const sql = `
+    UPDATE media_monitoring_data
+    SET ${column} = ?
+    WHERE insert_id = ?
+  `;
+
+  db.query(sql, [value, id], (err) => {
+
+    if (err) {
+      console.error("❌ updateMediaMonitoringData error:", err.message);
+      return res.json({ success: false });
+    }
+
+    res.json({ success: true });
 
   });
 
