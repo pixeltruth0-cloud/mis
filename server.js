@@ -2144,7 +2144,10 @@ SELECT DISTINCT user_mail FROM brand_affiliate WHERE DATE(date)=?
   WHERE DATE(date) = ?
 `;
 
-    db.query(submissionQuery, [today, today, today, today], (err, submissions) => {
+    db.query(
+  submissionQuery,
+  [today, today, today, today, today],
+  (err, submissions) => {
 
       if (err) {
         console.error("❌ Submission Query Error:", err.message);
