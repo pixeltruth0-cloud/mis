@@ -2175,15 +2175,23 @@ const inactiveQuery = `
 
       UNION
 
-      SELECT 1 FROM brand_infringement b
-        WHERE b.user_mail = u.User_Mail
-        AND DATE(b.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
-
       UNION
 
-      SELECT 1 FROM anti_money_laundering_data a
-        WHERE a.user_mail = u.User_Mail
-        AND DATE(a.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
+SELECT 1 FROM brand_infringement b
+  WHERE b.user_mail = u.User_Mail
+  AND DATE(b.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
+
+UNION
+
+SELECT 1 FROM brand_affiliate ba
+  WHERE ba.user_mail = u.User_Mail
+  AND DATE(ba.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
+
+UNION
+
+SELECT 1 FROM anti_money_laundering_data a
+  WHERE a.user_mail = u.User_Mail
+  AND DATE(a.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
     )
 `;
 
@@ -2202,6 +2210,10 @@ const inactiveQuery = `
           submissions.map(s => s.user_mail)
         );
 
+         console.log("TODAY:", today);
+console.log("USERS:", users);
+console.log("SUBMISSIONS:", submissions);
+console.log("INACTIVE:", inactiveRows);
         let departmentMap = {};
 
         users.forEach(u => {
