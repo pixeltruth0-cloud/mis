@@ -1002,7 +1002,7 @@ if (
 "App",
 "Net_Banking_Credit_Card",
 "Messaging_Channel_Platform",
-"Cryto_cases",
+"Crypto_cases",
 "International_cases",
 "Total_Cases",
 "Errors",
