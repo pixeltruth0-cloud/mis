@@ -2820,6 +2820,129 @@ app.get("/getMissedDays", (req, res) => {
   });
 
 });
+
+/* ======================
+   CHECK MISSING WORK LOG
+====================== */
+app.get("/checkMissingWorkLog", (req, res) => {
+
+  if (!db) {
+    return res.json({
+      success: false,
+      message: "Database not connected"
+    });
+  }
+
+  const { user_mail, department } = req.query;
+
+  if (!user_mail || !department) {
+    return res.json({
+      success: false,
+      message: "Missing parameters"
+    });
+  }
+
+  let tableName = "";
+
+  if (department === "Social_Media_N_Website_Audit") {
+    tableName = "social_media_n_website_audit_data";
+  }
+  else if (department === "Media_Monitoring") {
+    tableName = "media_monitoring_data";
+  }
+  else if (department === "Brand_Infringement") {
+    tableName = "brand_infringement";
+  }
+  else if (
+    department === "Brand_Affiliate" ||
+    department === "Brand_Safety_Affiliate"
+  ) {
+    tableName = "brand_affiliate";
+  }
+  else if (department === "Anti_Money_Laundering") {
+    tableName = "anti_money_laundering_data";
+  }
+  else {
+    return res.json({
+      success: false,
+      message: "Invalid department"
+    });
+  }
+
+  const sql = `
+    SELECT DISTINCT DATE(date) AS work_date
+    FROM ${tableName}
+    WHERE LOWER(TRIM(user_mail)) = LOWER(?)
+    ORDER BY work_date DESC
+  `;
+
+  db.query(sql, [user_mail], (err, rows) => {
+
+    if (err) {
+      console.error(err);
+      return res.json({
+        success: false
+      });
+    }
+
+    const submittedDates = new Set(
+      rows.map(r => new Date(r.work_date).toISOString().split("T")[0])
+    );
+
+    let missingDays = 0;
+
+    // Yesterday se count start hoga
+    let d = new Date();
+    d.setDate(d.getDate() - 1);
+
+    while (true) {
+
+      const dateStr = d.toISOString().split("T")[0];
+
+      if (submittedDates.has(dateStr)) {
+        break;
+      }
+
+      missingDays++;
+
+      d.setDate(d.getDate() - 1);
+
+      // Safety (100 days se jyada loop nahi chalega)
+      if (missingDays >= 100) {
+        break;
+      }
+    }
+
+    let status = "ok";
+    let message = "";
+
+    if (missingDays >= 1 && missingDays <= 3) {
+
+      status = "warning";
+
+      message =
+        `You have ${missingDays} pending work log(s). Please complete them.`;
+
+    }
+    else if (missingDays > 3) {
+
+      status = "critical";
+
+      message =
+        `You have missed work logs for ${missingDays} consecutive days. Please contact your Team Lead.`;
+
+    }
+
+    res.json({
+      success: true,
+      status,
+      missingDays,
+      message
+    });
+
+  });
+
+});
 /* ======================
    Server Start
 ====================== */
