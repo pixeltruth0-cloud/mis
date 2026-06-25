@@ -1134,29 +1134,40 @@ if (
 }
 
 
-// 🔥 REPLACE COMPLETE BLOCK
+// Director / HR Manager / Admin / HR / Team Lead
 if (
   roles.includes("DIRECTOR") ||
-  roles.includes("HR_MANAGER")
-) {
-  sql = `SELECT * FROM ${tableName} ORDER BY date DESC, ${orderByColumn} DESC`;
-}
-
-else if (
+  roles.includes("HR_MANAGER") ||
   roles.includes("ADMIN") ||
   roles.includes("HR") ||
   roles.includes("TEAM_LEAD")
 ) {
-  sql = `SELECT * FROM ${tableName} ORDER BY date DESC, ${orderByColumn} DESC`;
+
+  sql = `
+    SELECT t.*
+    FROM ${tableName} t
+    INNER JOIN mis_user_data u
+      ON LOWER(TRIM(t.user_mail)) = LOWER(TRIM(u.User_Mail))
+    WHERE u.is_archived = 0
+    ORDER BY t.date DESC, t.${orderByColumn} DESC
+  `;
+
 }
 
+// Employee / Intern
 else {
+
   sql = `
-    SELECT *
-    FROM ${tableName}
-    WHERE LOWER(TRIM(user_mail)) = LOWER(?)
-    ORDER BY date DESC, ${orderByColumn} DESC
+    SELECT t.*
+    FROM ${tableName} t
+    INNER JOIN mis_user_data u
+      ON LOWER(TRIM(t.user_mail)) = LOWER(TRIM(u.User_Mail))
+    WHERE
+      LOWER(TRIM(t.user_mail)) = LOWER(?)
+      AND u.is_archived = 0
+    ORDER BY t.date DESC, t.${orderByColumn} DESC
   `;
+
   params = [userMail];
 }
   db.query(sql, params, (err, rows) => {
