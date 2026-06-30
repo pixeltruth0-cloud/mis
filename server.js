@@ -415,11 +415,22 @@ app.post("/deleteUser", (req, res) => {
    ARCHIVE USER (SOFT DELETE)
 ====================== */
 app.post("/archiveUser", (req, res) => {
+
+  console.log("===== ARCHIVE API HIT =====");
+  console.log("BODY:", req.body);
+
   if (!db) {
-    return res.json({ success: false });
+    return res.json({ success: false, message: "DB not connected" });
   }
 
   const { Employee_ID } = req.body;
+
+  if (!Employee_ID) {
+    return res.json({
+      success: false,
+      message: "Employee_ID missing"
+    });
+  }
 
   const sql = `
     UPDATE mis_user_data
@@ -427,16 +438,26 @@ app.post("/archiveUser", (req, res) => {
     WHERE Employee_ID = ?
   `;
 
-  db.query(sql, [Employee_ID], (err) => {
+  db.query(sql, [Employee_ID], (err, result) => {
+
+    console.log("SQL ERROR:", err);
+    console.log("RESULT:", result);
+
     if (err) {
-      console.error("❌ Archive Error:", err.message);
-      return res.json({ success: false });
+      return res.json({
+        success: false,
+        error: err.message
+      });
     }
 
-    res.json({ success: true });
-  });
-});
+    res.json({
+      success: true,
+      affectedRows: result.affectedRows
+    });
 
+  });
+
+});
 
 /* ======================
    INSERT PROJECT DATA (DAILY LIMIT PROTECTED)
