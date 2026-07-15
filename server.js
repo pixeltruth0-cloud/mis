@@ -721,6 +721,7 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 "LiveCustomer_Brand",
 "LiveCustomer_Channel",
 "LiveCustomer_Count",
+"LiveCustomer_Automation_Checked_Count",
 "LiveCustomer_hours",
 "LiveCustomer_minutes",
 "LiveCustomer_Remark",
@@ -730,6 +731,7 @@ app.post("/submitBrandInfringement", upload.none(), (req, res) => {
 "POC_Brand",
 "POC_Channel",
 "POC_Count",
+"POC_Automation_Checked_Count",
 "POC_hours",
 "POC_minutes",
 "POC_Remark"
