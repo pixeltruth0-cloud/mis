@@ -2981,7 +2981,9 @@ app.get("/getEmployees", (req, res) => {
         return res.json([]);
     }
 
-    const sql = `
+    const { department } = req.query;
+
+    let sql = `
         SELECT
             User_Name,
             User_Mail,
@@ -2990,17 +2992,22 @@ app.get("/getEmployees", (req, res) => {
             Designation
         FROM mis_user_data
         WHERE is_archived = 0
-        ORDER BY User_Name ASC
     `;
 
-    db.query(sql, (err, rows) => {
+    const params = [];
+
+    if (department) {
+        sql += ` AND LOWER(TRIM(Department)) = LOWER(?)`;
+        params.push(department);
+    }
+
+    sql += ` ORDER BY User_Name ASC`;
+
+    db.query(sql, params, (err, rows) => {
 
         if (err) {
-
             console.error(err);
-
             return res.json([]);
-
         }
 
         res.json(rows);
