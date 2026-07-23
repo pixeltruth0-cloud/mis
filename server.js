@@ -3624,7 +3624,8 @@ app.post("/approveShiftRequest", (req, res) => {
 
                 reqData.new_shift_id,
 
-                reqData.user_mail
+                reqData.user_mail,
+               reqData.shift_date
 
             ],
 
