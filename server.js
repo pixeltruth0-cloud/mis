@@ -3761,6 +3761,644 @@ app.post("/rejectShiftRequest", (req, res) => {
     );
 
 });
+/* ==========================
+   CREATE SHIFT REQUEST
+========================== */
+
+app.post("/createShiftRequest", (req, res) => {
+
+    if (!db) {
+        return res.json({
+            success: false
+        });
+    }
+
+    const {
+
+        user_mail,
+        request_type,
+        old_shift_id,
+        new_shift_id,
+        shift_date,
+        reason
+
+    } = req.body;
+
+    if (
+        !user_mail ||
+        !old_shift_id ||
+        !new_shift_id ||
+        !shift_date
+    ) {
+
+        return res.json({
+            success: false,
+            message: "Missing Required Fields"
+        });
+
+    }
+
+    const sql = `
+
+        INSERT INTO shift_requests
+        (
+
+            user_mail,
+            request_type,
+            old_shift_id,
+            new_shift_id,
+            shift_date,
+            reason
+
+        )
+
+        VALUES
+
+        (
+
+            ?, ?, ?, ?, ?, ?
+
+        )
+
+    `;
+
+    db.query(
+
+        sql,
+
+        [
+
+            user_mail,
+
+            request_type || "Shift Change",
+
+            old_shift_id,
+
+            new_shift_id,
+
+            shift_date,
+
+            reason || ""
+
+        ],
+
+        err => {
+
+            if (err) {
+
+                console.error(err);
+
+                return res.json({
+                    success: false
+                });
+
+            }
+
+            res.json({
+
+                success: true,
+
+                message: "Shift Request Submitted"
+
+            });
+
+        }
+
+    );
+
+});
+
+
+/* ==========================
+   CREATE LEAVE REQUEST
+========================== */
+
+app.post("/createLeaveRequest", (req, res) => {
+
+    if (!db) {
+
+        return res.json({
+            success: false
+        });
+
+    }
+
+    const {
+
+        user_mail,
+        leave_type,
+        from_date,
+        to_date,
+        reason
+
+    } = req.body;
+
+    const sql = `
+
+        INSERT INTO leave_requests
+
+        (
+
+            user_mail,
+            leave_type,
+            from_date,
+            to_date,
+            reason
+
+        )
+
+        VALUES
+
+        (
+
+            ?, ?, ?, ?, ?
+
+        )
+
+    `;
+
+    db.query(
+
+        sql,
+
+        [
+
+            user_mail,
+
+            leave_type,
+
+            from_date,
+
+            to_date,
+
+            reason
+
+        ],
+
+        err => {
+
+            if (err) {
+
+                console.error(err);
+
+                return res.json({
+
+                    success: false
+
+                });
+
+            }
+
+            res.json({
+
+                success: true,
+
+                message: "Leave Request Submitted"
+
+            });
+
+        }
+
+    );
+
+});
+
+
+/* ==========================
+   GET ATTENDANCE
+========================== */
+
+app.get("/getAttendance", (req, res) => {
+
+    if (!db) {
+
+        return res.json([]);
+
+    }
+
+    const { user_mail } = req.query;
+
+    let sql = `
+
+        SELECT
+
+            a.*,
+
+            s.shift_name,
+
+            u.User_Name
+
+        FROM attendance_logs a
+
+        LEFT JOIN shift_master s
+
+            ON a.shift_id = s.id
+
+        LEFT JOIN mis_user_data u
+
+            ON a.user_mail = u.User_Mail
+
+    `;
+
+    const params = [];
+
+    if (user_mail) {
+
+        sql += ` WHERE a.user_mail = ?`;
+
+        params.push(user_mail);
+
+    }
+
+    sql += ` ORDER BY attendance_date DESC`;
+
+    db.query(
+
+        sql,
+
+        params,
+
+        (err, rows) => {
+
+            if (err) {
+
+                console.error(err);
+
+                return res.json([]);
+
+            }
+
+            res.json(rows);
+
+        }
+
+    );
+
+});
+/* ==========================
+   CLOCK IN
+========================== */
+
+app.post("/clockIn", (req, res) => {
+
+    if (!db) return res.json({ success: false });
+
+    const {
+        user_mail,
+        shift_id,
+        attendance_date,
+        clock_in,
+        clock_in_ip,
+        clock_in_location
+    } = req.body;
+
+    const getShift = `
+        SELECT start_time,end_time
+        FROM shift_master
+        WHERE id=?
+    `;
+
+    db.query(getShift, [shift_id], (err, shift) => {
+
+        if (err || shift.length === 0) {
+            return res.json({ success: false });
+        }
+
+        const sql = `
+            INSERT INTO attendance_logs
+            (
+                user_mail,
+                shift_id,
+                attendance_date,
+                shift_start,
+                shift_end,
+                clock_in,
+                clock_in_ip,
+                clock_in_location
+            )
+            VALUES
+            (?,?,?,?,?,?,?,?)
+        `;
+
+        db.query(sql, [
+
+            user_mail,
+            shift_id,
+            attendance_date,
+            shift[0].start_time,
+            shift[0].end_time,
+            clock_in,
+            clock_in_ip || "",
+            clock_in_location || ""
+
+        ], err => {
+
+            if (err) {
+                console.error(err);
+                return res.json({ success: false });
+            }
+
+            res.json({
+                success: true,
+                message: "Clock In Successful"
+            });
+
+        });
+
+    });
+
+});
+
+
+/* ==========================
+   CLOCK OUT
+========================== */
+
+app.post("/clockOut", (req, res) => {
+
+    if (!db) return res.json({ success: false });
+
+    const {
+
+        attendance_id,
+        clock_out,
+        clock_out_ip,
+        clock_out_location,
+        worked_hours,
+        paid_hours,
+        overtime_hours
+
+    } = req.body;
+
+    const sql = `
+        UPDATE attendance_logs
+
+        SET
+
+        clock_out=?,
+        clock_out_ip=?,
+        clock_out_location=?,
+        worked_hours=?,
+        paid_hours=?,
+        overtime_hours=?
+
+        WHERE id=?
+    `;
+
+    db.query(
+
+        sql,
+
+        [
+
+            clock_out,
+            clock_out_ip || "",
+            clock_out_location || "",
+            worked_hours,
+            paid_hours,
+            overtime_hours,
+            attendance_id
+
+        ],
+
+        err => {
+
+            if (err) {
+
+                console.error(err);
+
+                return res.json({
+                    success: false
+                });
+
+            }
+
+            res.json({
+
+                success: true,
+                message: "Clock Out Successful"
+
+            });
+
+        }
+
+    );
+
+});
+
+
+/* ==========================
+   BREAK START
+========================== */
+
+app.post("/startBreak", (req, res) => {
+
+    if (!db) return res.json({ success: false });
+
+    const {
+
+        attendance_id,
+        break_note
+
+    } = req.body;
+
+    const sql = `
+
+        INSERT INTO break_logs
+
+        (
+
+            attendance_id,
+            break_start,
+            break_note
+
+        )
+
+        VALUES
+
+        (
+
+            ?,NOW(),?
+
+        )
+
+    `;
+
+    db.query(
+
+        sql,
+
+        [
+
+            attendance_id,
+            break_note || ""
+
+        ],
+
+        err => {
+
+            if (err) {
+
+                console.error(err);
+
+                return res.json({
+                    success: false
+                });
+
+            }
+
+            res.json({
+
+                success: true,
+                message: "Break Started"
+
+            });
+
+        }
+
+    );
+
+});
+
+
+/* ==========================
+   BREAK END
+========================== */
+
+app.post("/endBreak", (req, res) => {
+
+    if (!db) return res.json({ success: false });
+
+    const { break_id } = req.body;
+
+    const sql = `
+
+        UPDATE break_logs
+
+        SET
+
+        break_end=NOW(),
+
+        break_hours=TIMESTAMPDIFF(MINUTE,break_start,NOW())/60
+
+        WHERE id=?
+
+    `;
+
+    db.query(
+
+        sql,
+
+        [break_id],
+
+        err => {
+
+            if (err) {
+
+                console.error(err);
+
+                return res.json({
+                    success: false
+                });
+
+            }
+
+            res.json({
+
+                success: true,
+                message: "Break Ended"
+
+            });
+
+        }
+
+    );
+
+});
+
+
+/* ==========================
+   GET BREAK LOGS
+========================== */
+
+app.get("/getBreakLogs", (req, res) => {
+
+    if (!db) return res.json([]);
+
+    const { attendance_id } = req.query;
+
+    const sql = `
+
+        SELECT *
+
+        FROM break_logs
+
+        WHERE attendance_id=?
+
+        ORDER BY break_start DESC
+
+    `;
+
+    db.query(
+
+        sql,
+
+        [attendance_id],
+
+        (err, rows) => {
+
+            if (err) {
+
+                console.error(err);
+
+                return res.json([]);
+
+            }
+
+            res.json(rows);
+
+        }
+
+    );
+
+});
+
+
+/* ==========================
+   GET OPEN SHIFTS
+========================== */
+
+app.get("/getOpenShifts", (req, res) => {
+
+    if (!db) return res.json([]);
+
+    const sql = `
+
+        SELECT *
+
+        FROM shift_master
+
+        WHERE is_active=1
+
+        ORDER BY start_time
+
+    `;
+
+    db.query(sql, (err, rows) => {
+
+        if (err) {
+
+            console.error(err);
+
+            return res.json([]);
+
+        }
+
+        res.json(rows);
+
+    });
+
+});
 /* ======================
    Server Start
 ====================== */
