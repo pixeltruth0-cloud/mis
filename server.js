@@ -2966,6 +2966,800 @@ app.get("/checkMissingWorkLog", (req, res) => {
   });
 
 });
+
+/* =====================================================
+                  SHIFT MANAGEMENT APIs
+===================================================== */
+
+/* ==========================
+   GET EMPLOYEES
+========================== */
+
+app.get("/getEmployees", (req, res) => {
+
+    if (!db) {
+        return res.json([]);
+    }
+
+    const sql = `
+        SELECT
+            User_Name,
+            User_Mail,
+            Employee_ID,
+            Department,
+            Designation
+        FROM mis_user_data
+        WHERE is_archived = 0
+        ORDER BY User_Name ASC
+    `;
+
+    db.query(sql, (err, rows) => {
+
+        if (err) {
+
+            console.error(err);
+
+            return res.json([]);
+
+        }
+
+        res.json(rows);
+
+    });
+
+});
+
+/* ==========================
+   GET SHIFT MASTER
+========================== */
+
+app.get("/getShiftMaster", (req, res) => {
+
+    if (!db) {
+        return res.json([]);
+    }
+
+    const sql = `
+        SELECT *
+        FROM shift_master
+        WHERE is_active = 1
+        ORDER BY start_time
+    `;
+
+    db.query(sql, (err, rows) => {
+
+        if (err) {
+
+            console.error(err);
+
+            return res.json([]);
+
+        }
+
+        res.json(rows);
+
+    });
+
+});
+
+/* ==========================
+   GET ASSIGNED SHIFTS
+========================== */
+
+app.get("/getAssignedShifts", (req, res) => {
+
+    if (!db) {
+
+        return res.json([]);
+
+    }
+
+    const sql = `
+
+    SELECT
+
+        es.id,
+        es.user_mail,
+        es.shift_id,
+        es.shift_date,
+        es.status,
+
+        sm.shift_name,
+        sm.start_time,
+        sm.end_time,
+        sm.color,
+
+        u.User_Name,
+        u.Department
+
+    FROM employee_shift es
+
+    LEFT JOIN shift_master sm
+        ON es.shift_id = sm.id
+
+    LEFT JOIN mis_user_data u
+        ON es.user_mail = u.User_Mail
+
+    ORDER BY es.shift_date ASC
+
+    `;
+
+    db.query(sql, (err, rows) => {
+
+        if (err) {
+
+            console.error(err);
+
+            return res.json([]);
+
+        }
+
+        res.json(rows);
+
+    });
+
+});
+
+/* ==========================
+   ASSIGN SHIFT
+========================== */
+
+app.post("/assignShift", (req, res) => {
+
+    if (!db) {
+        return res.json({
+            success: false,
+            message: "Database not connected"
+        });
+    }
+
+    const {
+
+        user_mail,
+        shift_id,
+        shift_date,
+        assigned_by
+
+    } = req.body;
+
+    if (!user_mail || !shift_id || !shift_date) {
+
+        return res.json({
+            success: false,
+            message: "Missing required fields"
+        });
+
+    }
+
+    const checkSql = `
+        SELECT id
+        FROM employee_shift
+        WHERE user_mail = ?
+        AND shift_date = ?
+    `;
+
+    db.query(checkSql, [user_mail, shift_date], (err, rows) => {
+
+        if (err) {
+
+            console.error(err);
+
+            return res.json({
+                success: false
+            });
+
+        }
+
+        if (rows.length > 0) {
+
+            return res.json({
+                success: false,
+                message: "Shift already assigned"
+            });
+
+        }
+
+        const insertSql = `
+            INSERT INTO employee_shift
+            (
+                user_mail,
+                shift_id,
+                shift_date,
+                status,
+                assigned_by
+            )
+            VALUES
+            (?, ?, ?, 'Assigned', ?)
+        `;
+
+        db.query(
+
+            insertSql,
+
+            [
+                user_mail,
+                shift_id,
+                shift_date,
+                assigned_by || ""
+            ],
+
+            err => {
+
+                if (err) {
+
+                    console.error(err);
+
+                    return res.json({
+                        success: false
+                    });
+
+                }
+
+                res.json({
+                    success: true,
+                    message: "Shift Assigned Successfully"
+                });
+
+            }
+
+        );
+
+    });
+
+});
+
+
+/* ==========================
+   UPDATE SHIFT
+========================== */
+
+app.put("/updateShift", (req, res) => {
+
+    if (!db) {
+
+        return res.json({
+            success: false
+        });
+
+    }
+
+    const {
+
+        id,
+        shift_id,
+        shift_date,
+        status
+
+    } = req.body;
+
+    if (!id) {
+
+        return res.json({
+            success: false
+        });
+
+    }
+
+    const sql = `
+        UPDATE employee_shift
+
+        SET
+
+        shift_id = ?,
+        shift_date = ?,
+        status = ?
+
+        WHERE id = ?
+    `;
+
+    db.query(
+
+        sql,
+
+        [
+            shift_id,
+            shift_date,
+            status,
+            id
+        ],
+
+        err => {
+
+            if (err) {
+
+                console.error(err);
+
+                return res.json({
+                    success: false
+                });
+
+            }
+
+            res.json({
+
+                success: true,
+                message: "Shift Updated"
+
+            });
+
+        }
+
+    );
+
+});
+
+
+/* ==========================
+   DELETE SHIFT
+========================== */
+
+app.delete("/deleteShift/:id", (req, res) => {
+
+    if (!db) {
+
+        return res.json({
+            success: false
+        });
+
+    }
+
+    const id = req.params.id;
+
+    const sql = `
+        DELETE
+        FROM employee_shift
+        WHERE id = ?
+    `;
+
+    db.query(
+
+        sql,
+
+        [id],
+
+        err => {
+
+            if (err) {
+
+                console.error(err);
+
+                return res.json({
+                    success: false
+                });
+
+            }
+
+            res.json({
+
+                success: true,
+                message: "Shift Deleted"
+
+            });
+
+        }
+
+    );
+
+});
+/* ==========================
+   GET LEAVE REQUESTS
+========================== */
+
+app.get("/getLeaveRequests", (req, res) => {
+
+    if (!db) return res.json([]);
+
+    const sql = `
+        SELECT
+            lr.*,
+            u.User_Name,
+            u.Department
+        FROM leave_requests lr
+        LEFT JOIN mis_user_data u
+            ON lr.user_mail = u.User_Mail
+        ORDER BY lr.created_at DESC
+    `;
+
+    db.query(sql, (err, rows) => {
+
+        if (err) {
+
+            console.error(err);
+
+            return res.json([]);
+
+        }
+
+        res.json(rows);
+
+    });
+
+});
+
+
+/* ==========================
+   APPROVE LEAVE
+========================== */
+
+app.post("/approveLeave", (req, res) => {
+
+    if (!db) {
+
+        return res.json({ success:false });
+
+    }
+
+    const {
+
+        id,
+        approved_by,
+        approval_note
+
+    } = req.body;
+
+    const sql = `
+        UPDATE leave_requests
+        SET
+            status='Approved',
+            approved_by=?,
+            approval_note=?
+        WHERE id=?
+    `;
+
+    db.query(
+
+        sql,
+
+        [
+            approved_by || "",
+            approval_note || "",
+            id
+        ],
+
+        err => {
+
+            if (err) {
+
+                console.error(err);
+
+                return res.json({
+                    success:false
+                });
+
+            }
+
+            res.json({
+                success:true,
+                message:"Leave Approved"
+            });
+
+        }
+
+    );
+
+});
+
+
+/* ==========================
+   REJECT LEAVE
+========================== */
+
+app.post("/rejectLeave", (req, res) => {
+
+    if (!db) {
+
+        return res.json({ success:false });
+
+    }
+
+    const {
+
+        id,
+        approved_by,
+        approval_note
+
+    } = req.body;
+
+    const sql = `
+        UPDATE leave_requests
+        SET
+            status='Rejected',
+            approved_by=?,
+            approval_note=?
+        WHERE id=?
+    `;
+
+    db.query(
+
+        sql,
+
+        [
+            approved_by || "",
+            approval_note || "",
+            id
+        ],
+
+        err => {
+
+            if (err) {
+
+                console.error(err);
+
+                return res.json({
+                    success:false
+                });
+
+            }
+
+            res.json({
+
+                success:true,
+                message:"Leave Rejected"
+
+            });
+
+        }
+
+    );
+
+});
+
+
+/* ==========================
+   GET SHIFT REQUESTS
+========================== */
+
+app.get("/getShiftRequests", (req, res) => {
+
+    if (!db) return res.json([]);
+
+    const sql = `
+
+        SELECT
+
+            sr.*,
+
+            u.User_Name,
+
+            oldShift.shift_name AS old_shift,
+
+            newShift.shift_name AS new_shift
+
+        FROM shift_requests sr
+
+        LEFT JOIN mis_user_data u
+
+            ON sr.user_mail = u.User_Mail
+
+        LEFT JOIN shift_master oldShift
+
+            ON sr.old_shift_id = oldShift.id
+
+        LEFT JOIN shift_master newShift
+
+            ON sr.new_shift_id = newShift.id
+
+        ORDER BY sr.created_at DESC
+
+    `;
+
+    db.query(sql, (err, rows) => {
+
+        if (err) {
+
+            console.error(err);
+
+            return res.json([]);
+
+        }
+
+        res.json(rows);
+
+    });
+
+});
+
+
+/* ==========================
+   APPROVE SHIFT REQUEST
+========================== */
+
+app.post("/approveShiftRequest", (req, res) => {
+
+    if (!db) {
+
+        return res.json({
+            success:false
+        });
+
+    }
+
+    const {
+
+        id,
+        approved_by
+
+    } = req.body;
+
+    const getSql = `
+        SELECT *
+        FROM shift_requests
+        WHERE id=?
+    `;
+
+    db.query(getSql,[id],(err,result)=>{
+
+        if(err){
+
+            console.error(err);
+
+            return res.json({
+                success:false
+            });
+
+        }
+
+        if(result.length===0){
+
+            return res.json({
+                success:false
+            });
+
+        }
+
+        const reqData=result[0];
+
+       const updateShift = `
+          UPDATE employee_shift
+          SET shift_id = ?
+          WHERE user_mail = ?
+          AND shift_date = ?
+      `;
+
+        db.query(
+
+            updateShift,
+
+            [
+
+                reqData.new_shift_id,
+
+                reqData.user_mail
+
+            ],
+
+            err=>{
+
+                if(err){
+
+                    console.error(err);
+
+                    return res.json({
+                        success:false
+                    });
+
+                }
+
+                db.query(
+
+                    `UPDATE shift_requests
+                     SET status='Approved',
+                     approved_by=?
+                     WHERE id=?`,
+
+                    [
+
+                        approved_by || "",
+
+                        id
+
+                    ],
+
+                    err=>{
+
+                        if(err){
+
+                            console.error(err);
+
+                            return res.json({
+                                success:false
+                            });
+
+                        }
+
+                        res.json({
+
+                            success:true,
+
+                            message:"Shift Request Approved"
+
+                        });
+
+                    }
+
+                );
+
+            }
+
+        );
+
+    });
+
+});
+
+
+/* ==========================
+   REJECT SHIFT REQUEST
+========================== */
+
+app.post("/rejectShiftRequest", (req, res) => {
+
+    if (!db) {
+
+        return res.json({
+            success:false
+        });
+
+    }
+
+    const {
+
+        id,
+        approved_by
+
+    } = req.body;
+
+    const sql=`
+
+        UPDATE shift_requests
+
+        SET
+
+        status='Rejected',
+
+        approved_by=?
+
+        WHERE id=?
+
+    `;
+
+    db.query(
+
+        sql,
+
+        [
+
+            approved_by || "",
+
+            id
+
+        ],
+
+        err=>{
+
+            if(err){
+
+                console.error(err);
+
+                return res.json({
+                    success:false
+                });
+
+            }
+
+            res.json({
+
+                success:true,
+
+                message:"Shift Request Rejected"
+
+            });
+
+        }
+
+    );
+
+});
 /* ======================
    Server Start
 ====================== */
