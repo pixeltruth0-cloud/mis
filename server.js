@@ -2972,6 +2972,179 @@ app.get("/checkMissingWorkLog", (req, res) => {
 ===================================================== */
 
 /* ==========================
+   GET EMPLOYEE SHIFT
+===================================================== */
+app.get("/getEmployeeShift", (req, res) => {
+    if (!db) {
+        return res.json([]);
+    }
+    const { user_mail } = req.query;
+    if (!user_mail) {
+        return res.json([]);
+    }
+
+    const sql = `
+        SELECT 
+            es.id,
+            es.user_mail,
+            es.shift_id,
+            es.shift_date,
+            es.status,
+            sm.shift_name,
+            sm.start_time,
+            sm.end_time,
+            sm.color
+        FROM employee_shift es
+        LEFT JOIN shift_master sm
+            ON es.shift_id = sm.id
+        WHERE es.user_mail = ?
+        ORDER BY es.shift_date ASC
+    `;
+
+    db.query(sql, [user_mail], (err, rows) => {
+        if (err) {
+            console.error(err);
+            return res.json([]);
+        }
+        // Format dates as YYYY-MM-DD
+        const formatted = rows.map(r => {
+            if (r.shift_date) {
+                const d = new Date(r.shift_date);
+                const tzOffset = d.getTimezoneOffset() * 60000;
+                r.shift_date = new Date(d.getTimezoneOffset() < 0 ? d.getTime() - tzOffset : d.getTime()).toISOString().slice(0, 10);
+            }
+            return r;
+        });
+        res.json(formatted);
+    });
+});
+
+/* ==========================
+   GET TODAY ATTENDANCE
+===================================================== */
+app.get("/todayAttendance", (req, res) => {
+    if (!db) {
+        return res.json(null);
+    }
+    const { user_mail, date } = req.query;
+    if (!user_mail) {
+        return res.status(400).json({ error: "user_mail is required" });
+    }
+
+    // Get local date string YYYY-MM-DD
+    const tzOffset = (new Date()).getTimezoneOffset() * 60000;
+    const targetDate = date || (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
+
+    const sql = `
+        SELECT * 
+        FROM attendance_logs 
+        WHERE user_mail = ? AND attendance_date = ?
+        LIMIT 1
+    `;
+
+    db.query(sql, [user_mail, targetDate], (err, rows) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: "Database error" });
+        }
+
+        if (rows.length === 0) {
+            return res.json({ 
+                clockedIn: false, 
+                clockedOut: false, 
+                attendance: null, 
+                activeBreak: null 
+            });
+        }
+
+        const attendanceRecord = rows[0];
+
+        const breakSql = `
+            SELECT * 
+            FROM break_logs 
+            WHERE attendance_id = ?
+            ORDER BY id DESC
+        `;
+
+        db.query(breakSql, [attendanceRecord.id], (err, breaks) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ error: "Database error" });
+            }
+
+            const activeBreak = breaks.find(b => b.break_end === null);
+
+            res.json({
+                clockedIn: attendanceRecord.clock_in !== null,
+                clockedOut: attendanceRecord.clock_out !== null,
+                attendance: attendanceRecord,
+                activeBreak: activeBreak || null,
+                allBreaks: breaks
+        });
+    });
+});
+
+/* ==========================
+   CREATE SHIFT TEMPLATE
+========================== */
+app.post("/createShiftTemplate", (req, res) => {
+    if (!db) {
+        return res.status(500).json({ success: false, message: "Database connection not available" });
+    }
+
+    const {
+        shift_name,
+        shift_code,
+        start_time,
+        end_time,
+        color,
+        break_start,
+        break_end,
+        working_hours,
+        created_by
+    } = req.body;
+
+    if (!shift_name || !start_time || !end_time) {
+        return res.status(400).json({ success: false, message: "Missing required fields (shift_name, start_time, end_time)" });
+    }
+
+    const sql = `
+        INSERT INTO shift_master
+        (
+            shift_name,
+            shift_code,
+            start_time,
+            end_time,
+            break_start,
+            break_end,
+            working_hours,
+            color,
+            is_active,
+            created_by
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    `;
+
+    db.query(sql, [
+        shift_name,
+        shift_code || shift_name.toUpperCase().substring(0, 10),
+        start_time,
+        end_time,
+        break_start || null,
+        break_end || null,
+        working_hours || null,
+        color || "#0078d4",
+        created_by || "Admin"
+    ], (err, result) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ success: false, message: "Database insertion failed" });
+        }
+        res.json({ success: true, message: "Shift template created successfully", insertId: result.insertId });
+    });
+});
+
+/* ==========================
    GET EMPLOYEES
 ========================== */
 
