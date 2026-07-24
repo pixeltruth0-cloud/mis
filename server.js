@@ -3094,6 +3094,7 @@ app.post("/createShiftTemplate", (req, res) => {
     }
 
     const {
+        id,
         shift_name,
         shift_code,
         start_time,
@@ -3109,40 +3110,73 @@ app.post("/createShiftTemplate", (req, res) => {
         return res.status(400).json({ success: false, message: "Missing required fields (shift_name, start_time, end_time)" });
     }
 
-    const sql = `
-        INSERT INTO shift_master
-        (
+    if (id) {
+        const sql = `
+            UPDATE shift_master
+            SET
+                shift_name = ?,
+                shift_code = ?,
+                start_time = ?,
+                end_time = ?,
+                break_start = ?,
+                break_end = ?,
+                working_hours = ?,
+                color = ?
+            WHERE id = ?
+        `;
+        db.query(sql, [
             shift_name,
-            shift_code,
+            shift_code || shift_name.toUpperCase().substring(0, 10),
             start_time,
             end_time,
-            break_start,
-            break_end,
-            working_hours,
-            color,
-            is_active,
-            created_by
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-    `;
+            break_start || null,
+            break_end || null,
+            working_hours || null,
+            color || "#0078d4",
+            id
+        ], (err, result) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ success: false, message: "Database update failed" });
+            }
+            res.json({ success: true, message: "Shift template updated successfully" });
+        });
+    } else {
+        const sql = `
+            INSERT INTO shift_master
+            (
+                shift_name,
+                shift_code,
+                start_time,
+                end_time,
+                break_start,
+                break_end,
+                working_hours,
+                color,
+                is_active,
+                created_by
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        `;
 
-    db.query(sql, [
-        shift_name,
-        shift_code || shift_name.toUpperCase().substring(0, 10),
-        start_time,
-        end_time,
-        break_start || null,
-        break_end || null,
-        working_hours || null,
-        color || "#0078d4",
-        created_by || "Admin"
-    ], (err, result) => {
-        if (err) {
-            console.error(err);
-            return res.status(500).json({ success: false, message: "Database insertion failed" });
-        }
-        res.json({ success: true, message: "Shift template created successfully", insertId: result.insertId });
-    });
+        db.query(sql, [
+            shift_name,
+            shift_code || shift_name.toUpperCase().substring(0, 10),
+            start_time,
+            end_time,
+            break_start || null,
+            break_end || null,
+            working_hours || null,
+            color || "#0078d4",
+            created_by || "Admin"
+        ], (err, result) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ success: false, message: "Database insertion failed" });
+            }
+            res.json({ success: true, message: "Shift template created successfully", insertId: result.insertId });
+        });
+    }
 });
 
 /* ==========================
@@ -3275,8 +3309,15 @@ app.get("/getAssignedShifts", (req, res) => {
 
         }
 
-        res.json(rows);
-
+        const formatted = rows.map(r => {
+            if (r.shift_date) {
+                const d = new Date(r.shift_date);
+                const tzOffset = d.getTimezoneOffset() * 60000;
+                r.shift_date = new Date(d.getTimezoneOffset() < 0 ? d.getTime() - tzOffset : d.getTime()).toISOString().slice(0, 10);
+            }
+            return r;
+        });
+        res.json(formatted);
     });
 
 });
