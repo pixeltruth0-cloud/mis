@@ -3080,6 +3080,7 @@ app.get("/todayAttendance", (req, res) => {
                 attendance: attendanceRecord,
                 activeBreak: activeBreak || null,
                 allBreaks: breaks
+            });
         });
     });
 });
