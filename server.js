@@ -2982,13 +2982,12 @@ app.get("/getEmployeeShift", (req, res) => {
     if (!user_mail) {
         return res.json([]);
     }
-
     const sql = `
         SELECT 
             es.id,
             es.user_mail,
             es.shift_id,
-            es.shift_date,
+            DATE_FORMAT(es.shift_date, '%Y-%m-%d') AS shift_date,
             es.status,
             sm.shift_name,
             sm.start_time,
@@ -3006,16 +3005,7 @@ app.get("/getEmployeeShift", (req, res) => {
             console.error(err);
             return res.json([]);
         }
-        // Format dates as YYYY-MM-DD
-        const formatted = rows.map(r => {
-            if (r.shift_date) {
-                const d = new Date(r.shift_date);
-                const tzOffset = d.getTimezoneOffset() * 60000;
-                r.shift_date = new Date(d.getTimezoneOffset() < 0 ? d.getTime() - tzOffset : d.getTime()).toISOString().slice(0, 10);
-            }
-            return r;
-        });
-        res.json(formatted);
+        res.json(rows);
     });
 });
 
@@ -3276,7 +3266,7 @@ app.get("/getAssignedShifts", (req, res) => {
         es.id,
         es.user_mail,
         es.shift_id,
-        es.shift_date,
+        DATE_FORMAT(es.shift_date, '%Y-%m-%d') AS shift_date,
         es.status,
 
         sm.shift_name,
@@ -3309,15 +3299,7 @@ app.get("/getAssignedShifts", (req, res) => {
 
         }
 
-        const formatted = rows.map(r => {
-            if (r.shift_date) {
-                const d = new Date(r.shift_date);
-                const tzOffset = d.getTimezoneOffset() * 60000;
-                r.shift_date = new Date(d.getTimezoneOffset() < 0 ? d.getTime() - tzOffset : d.getTime()).toISOString().slice(0, 10);
-            }
-            return r;
-        });
-        res.json(formatted);
+        res.json(rows);
     });
 
 });
