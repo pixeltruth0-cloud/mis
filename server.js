@@ -3260,19 +3260,21 @@ app.get("/getAssignedShifts", (req, res) => {
     }
 
     const sql = `
-
     SELECT
-
         es.id,
         es.user_mail,
         es.shift_id,
         DATE_FORMAT(es.shift_date, '%Y-%m-%d') AS shift_date,
         es.status,
+        es.group_id,
+        es.notes,
+        es.custom_label,
+        es.open_slots,
+        COALESCE(es.color, sm.color) AS color,
 
         sm.shift_name,
         sm.start_time,
         sm.end_time,
-        sm.color,
 
         u.User_Name,
         u.Department
@@ -3309,7 +3311,6 @@ app.get("/getAssignedShifts", (req, res) => {
 ========================== */
 
 app.post("/assignShift", (req, res) => {
-
     if (!db) {
         return res.json({
             success: false,
@@ -3318,51 +3319,53 @@ app.post("/assignShift", (req, res) => {
     }
 
     const {
-
         user_mail,
         shift_id,
         shift_date,
-        assigned_by
-
+        assigned_by,
+        group_id,
+        notes,
+        custom_label,
+        open_slots,
+        color
     } = req.body;
 
-    if (!user_mail || !shift_id || !shift_date) {
-
+    if (!shift_id || !shift_date) {
         return res.json({
             success: false,
             message: "Missing required fields"
         });
-
     }
 
-    const checkSql = `
-        SELECT id
-        FROM employee_shift
-        WHERE user_mail = ?
-        AND shift_date = ?
-    `;
+    // Duplicate check only if user_mail is specified (regular shift assignment)
+    if (user_mail) {
+        const checkSql = `
+            SELECT id
+            FROM employee_shift
+            WHERE user_mail = ?
+            AND shift_date = ?
+        `;
 
-    db.query(checkSql, [user_mail, shift_date], (err, rows) => {
+        db.query(checkSql, [user_mail, shift_date], (err, rows) => {
+            if (err) {
+                console.error(err);
+                return res.json({ success: false });
+            }
 
-        if (err) {
+            if (rows.length > 0) {
+                return res.json({
+                    success: false,
+                    message: "Shift already assigned"
+                });
+            }
 
-            console.error(err);
+            doInsert();
+        });
+    } else {
+        doInsert();
+    }
 
-            return res.json({
-                success: false
-            });
-
-        }
-
-        if (rows.length > 0) {
-
-            return res.json({
-                success: false,
-                message: "Shift already assigned"
-            });
-
-        }
-
+    function doInsert() {
         const insertSql = `
             INSERT INTO employee_shift
             (
@@ -3370,46 +3373,43 @@ app.post("/assignShift", (req, res) => {
                 shift_id,
                 shift_date,
                 status,
-                assigned_by
+                assigned_by,
+                group_id,
+                notes,
+                custom_label,
+                open_slots,
+                color
             )
             VALUES
-            (?, ?, ?, 'Assigned', ?)
+            (?, ?, ?, 'Assigned', ?, ?, ?, ?, ?, ?)
         `;
 
         db.query(
-
             insertSql,
-
             [
-                user_mail,
+                user_mail || null,
                 shift_id,
                 shift_date,
-                assigned_by || ""
+                assigned_by || "",
+                group_id || null,
+                notes || null,
+                custom_label || null,
+                open_slots || 1,
+                color || null
             ],
-
             err => {
-
                 if (err) {
-
-                    console.error(err);
-
-                    return res.json({
-                        success: false
-                    });
-
+                    console.error("Error inserting employee shift:", err);
+                    return res.json({ success: false });
                 }
 
                 res.json({
                     success: true,
                     message: "Shift Assigned Successfully"
                 });
-
             }
-
         );
-
-    });
-
+    }
 });
 
 
@@ -3418,78 +3418,72 @@ app.post("/assignShift", (req, res) => {
 ========================== */
 
 app.put("/updateShift", (req, res) => {
-
     if (!db) {
-
         return res.json({
             success: false
         });
-
     }
 
     const {
-
         id,
         shift_id,
         shift_date,
-        status
-
+        status,
+        user_mail,
+        group_id,
+        notes,
+        custom_label,
+        open_slots,
+        color
     } = req.body;
 
     if (!id) {
-
         return res.json({
             success: false
         });
-
     }
 
     const sql = `
         UPDATE employee_shift
-
         SET
-
-        shift_id = ?,
-        shift_date = ?,
-        status = ?
-
+            shift_id = ?,
+            shift_date = ?,
+            status = ?,
+            user_mail = ?,
+            group_id = ?,
+            notes = ?,
+            custom_label = ?,
+            open_slots = ?,
+            color = ?
         WHERE id = ?
     `;
 
     db.query(
-
         sql,
-
         [
             shift_id,
             shift_date,
             status,
+            user_mail || null,
+            group_id || null,
+            notes || null,
+            custom_label || null,
+            open_slots || 1,
+            color || null,
             id
         ],
-
         err => {
-
             if (err) {
-
-                console.error(err);
-
-                return res.json({
-                    success: false
-                });
-
+                console.error("Error updating employee shift:", err);
+                return res.json({ success: false });
             }
 
             res.json({
-
                 success: true,
                 message: "Shift Updated"
-
             });
-
         }
-
     );
-
 });
 
 
