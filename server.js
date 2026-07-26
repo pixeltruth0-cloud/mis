@@ -4719,21 +4719,50 @@ app.post("/addGroupMember", (req, res) => {
     });
 });
 
-// 6. POST /removeGroupMember
-app.post("/removeGroupMember", (req, res) => {
+// 7. POST /updateGroupMembers
+app.post("/updateGroupMembers", (req, res) => {
     if (!db) return res.status(500).json({ error: "Database not connected" });
-    const { user_mail } = req.body;
-    if (!user_mail) {
-        return res.status(400).json({ error: "User mail is required" });
+    const { group_id, emails } = req.body;
+    if (!group_id || !Array.isArray(emails)) {
+        return res.status(400).json({ error: "Group ID and emails array are required" });
     }
 
-    const sql = `DELETE FROM shift_group_members WHERE user_mail = ?`;
-    db.query(sql, [user_mail], (err, result) => {
+    if (group_id === "unnamed") {
+        if (emails.length === 0) return res.json({ success: true });
+        const ungroupSql = `DELETE FROM shift_group_members WHERE user_mail IN (?)`;
+        db.query(ungroupSql, [emails], (err) => {
+            if (err) {
+                console.error("Error ungrouping employees:", err);
+                return res.status(500).json({ error: "Database error" });
+            }
+            res.json({ success: true });
+        });
+        return;
+    }
+
+    // Delete all current members for this group
+    const deleteSql = `DELETE FROM shift_group_members WHERE group_id = ?`;
+    db.query(deleteSql, [group_id], (err) => {
         if (err) {
-            console.error("Error removing group member:", err);
+            console.error("Error clearing group members:", err);
             return res.status(500).json({ error: "Database error" });
         }
-        res.json({ success: true });
+
+        if (emails.length === 0) {
+            return res.json({ success: true });
+        }
+
+        // Bulk insert new members
+        const insertSql = `INSERT INTO shift_group_members (group_id, user_mail) VALUES ?`;
+        const values = emails.map(email => [group_id, email]);
+        
+        db.query(insertSql, [values], (err) => {
+            if (err) {
+                console.error("Error bulk inserting group members:", err);
+                return res.status(500).json({ error: "Database error" });
+            }
+            res.json({ success: true });
+        });
     });
 });
 
