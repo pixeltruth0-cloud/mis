@@ -4603,6 +4603,141 @@ app.get("/getOpenShifts", (req, res) => {
     });
 
 });
+
+/* ==========================================================
+   SHIFT GROUPS APIS
+   ========================================================== */
+
+// 1. GET /getGroups
+app.get("/getGroups", (req, res) => {
+    if (!db) return res.json([]);
+    const { department } = req.query;
+    if (!department) {
+        return res.status(400).json({ error: "Department is required" });
+    }
+
+    const getGroupsSql = `SELECT * FROM shift_groups WHERE LOWER(TRIM(department)) = LOWER(?)`;
+    db.query(getGroupsSql, [department], (err, groups) => {
+        if (err) {
+            console.error("Error fetching shift groups:", err);
+            return res.status(500).json({ error: "Database error" });
+        }
+
+        const getMembersSql = `
+            SELECT m.group_id, m.user_mail, u.User_Name, u.Department, u.Designation
+            FROM shift_group_members m
+            JOIN mis_user_data u ON m.user_mail = u.User_Mail
+            WHERE LOWER(TRIM(u.Department)) = LOWER(?) AND u.is_archived = 0
+        `;
+        db.query(getMembersSql, [department], (err, members) => {
+            if (err) {
+                console.error("Error fetching shift group members:", err);
+                return res.status(500).json({ error: "Database error" });
+            }
+
+            // Map members to groups
+            const result = groups.map(g => {
+                return {
+                    ...g,
+                    members: members.filter(m => m.group_id === g.id)
+                };
+            });
+            res.json(result);
+        });
+    });
+});
+
+// 2. POST /createGroup
+app.post("/createGroup", (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    const { group_name, department } = req.body;
+    if (!group_name || !department) {
+        return res.status(400).json({ error: "Group name and department are required" });
+    }
+
+    const sql = `INSERT INTO shift_groups (group_name, department) VALUES (?, ?)`;
+    db.query(sql, [group_name, department], (err, result) => {
+        if (err) {
+            console.error("Error creating group:", err);
+            return res.status(500).json({ error: "Database error" });
+        }
+        res.json({ success: true, groupId: result.insertId });
+    });
+});
+
+// 3. POST /deleteGroup
+app.post("/deleteGroup", (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    const { group_id } = req.body;
+    if (!group_id) {
+        return res.status(400).json({ error: "Group ID is required" });
+    }
+
+    const sql = `DELETE FROM shift_groups WHERE id = ?`;
+    db.query(sql, [group_id], (err, result) => {
+        if (err) {
+            console.error("Error deleting group:", err);
+            return res.status(500).json({ error: "Database error" });
+        }
+        res.json({ success: true });
+    });
+});
+
+// 4. POST /renameGroup
+app.post("/renameGroup", (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    const { group_id, group_name } = req.body;
+    if (!group_id || !group_name) {
+        return res.status(400).json({ error: "Group ID and group name are required" });
+    }
+
+    const sql = `UPDATE shift_groups SET group_name = ? WHERE id = ?`;
+    db.query(sql, [group_name, group_id], (err, result) => {
+        if (err) {
+            console.error("Error renaming group:", err);
+            return res.status(500).json({ error: "Database error" });
+        }
+        res.json({ success: true });
+    });
+});
+
+// 5. POST /addGroupMember
+app.post("/addGroupMember", (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    const { group_id, user_mail } = req.body;
+    if (!group_id || !user_mail) {
+        return res.status(400).json({ error: "Group ID and user mail are required" });
+    }
+
+    const sql = `INSERT INTO shift_group_members (group_id, user_mail) VALUES (?, ?) ON DUPLICATE KEY UPDATE group_id = VALUES(group_id)`;
+    db.query(sql, [group_id, user_mail], (err, result) => {
+        if (err) {
+            console.error("Error adding group member:", err);
+            return res.status(500).json({ error: "Database error" });
+        }
+        res.json({ success: true });
+    });
+});
+
+// 6. POST /removeGroupMember
+app.post("/removeGroupMember", (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    const { user_mail } = req.body;
+    if (!user_mail) {
+        return res.status(400).json({ error: "User mail is required" });
+    }
+
+    const sql = `DELETE FROM shift_group_members WHERE user_mail = ?`;
+    db.query(sql, [user_mail], (err, result) => {
+        if (err) {
+            console.error("Error removing group member:", err);
+            return res.status(500).json({ error: "Database error" });
+        }
+        res.json({ success: true });
+    });
+});
+
+/* ======================
 /* ======================
    Server Start
 ====================== */
