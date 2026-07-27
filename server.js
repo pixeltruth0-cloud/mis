@@ -4760,6 +4760,35 @@ app.post("/updateGroupMembers", (req, res) => {
     });
 });
 
+app.post("/deleteShiftTemplate", (req, res) => {
+    if (!db) {
+        return res.status(500).json({ success: false, message: "Database connection not available" });
+    }
+    const { id } = req.body;
+    if (!id) {
+        return res.status(400).json({ success: false, message: "Missing template ID" });
+    }
+
+    // First delete dependent assignments in employee_shift
+    const deleteAssignmentsSql = "DELETE FROM employee_shift WHERE shift_id = ?";
+    db.query(deleteAssignmentsSql, [id], (err) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ success: false, message: "Database dependency deletion failed" });
+        }
+
+        // Then delete the template
+        const deleteTemplateSql = "DELETE FROM shift_master WHERE id = ?";
+        db.query(deleteTemplateSql, [id], (err, result) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ success: false, message: "Database deletion failed" });
+            }
+            res.json({ success: true, message: "Shift template deleted successfully" });
+        });
+    });
+});
+
 /* ======================
 /* ======================
    Server Start
