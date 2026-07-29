@@ -1292,7 +1292,7 @@ const executeDuesCheckLogic = (res = null) => {
                         if (deptResults.length === 0) return resolveDept();
 
                         // Send summary email to managers
-                        const managerEmails = managers.map(m => m.User_Mail).filter(Boolean);
+                        const managerEmails = cleanEmailRecipients(managers.map(m => m.User_Mail));
                         
                         const sendDeptEmailPromise = new Promise((resolveSend) => {
                             if (managerEmails.length > 0) {
@@ -1380,6 +1380,12 @@ const executeDuesCheckLogic = (res = null) => {
                                     </div>
                                 `;
 
+                                const cleanedEmpList = cleanEmailRecipients([dueEmp.User_Mail]);
+                                if (cleanedEmpList.length === 0) {
+                                    return resolveWarning();
+                                }
+                                const targetEmail = cleanedEmpList[0];
+
                                 fetch("https://api.brevo.com/v3/smtp/email", {
                                     method: "POST",
                                     headers: {
@@ -1389,14 +1395,14 @@ const executeDuesCheckLogic = (res = null) => {
                                     },
                                     body: JSON.stringify({
                                         sender: { name: "Pixeltruth Scheduler", email: "pixeltruth.notify@gmail.com" },
-                                        to: [{ email: dueEmp.User_Mail, name: dueEmp.User_Name }],
+                                        to: [{ email: targetEmail, name: dueEmp.User_Name }],
                                         subject: `⚠️ Action Required: Daily Work Log Due Alert`,
                                         htmlContent: warnHtml
                                     })
                                 }).then(() => {
                                     resolveWarning();
                                 }).catch(err => {
-                                    console.error(`❌ Failed to send individual due warning to ${dueEmp.User_Mail}:`, err);
+                                    console.error(`❌ Failed to send individual due warning to ${targetEmail}:`, err);
                                     resolveWarning();
                                 });
                             });
@@ -1418,7 +1424,7 @@ const executeDuesCheckLogic = (res = null) => {
                         return;
                     }
 
-                    const directorEmails = directors.map(d => d.User_Mail).filter(Boolean);
+                    const directorEmails = cleanEmailRecipients(directors.map(d => d.User_Mail));
                     if (directorEmails.length > 0) {
                         const formattedDate = todayDate.toLocaleDateString("en-US", {
                             weekday: 'long',
@@ -3751,6 +3757,31 @@ app.get("/getAssignedShifts", (req, res) => {
 
 });
 
+// Clean and format recipient emails: strips 'admin_', removes test emails (.admin / director)
+const cleanEmailRecipients = (emails) => {
+    const cleaned = [];
+    emails.forEach(email => {
+        if (!email) return;
+        let cleanedEmail = email.trim().toLowerCase();
+
+        // 1. If email starts with 'admin_', strip it
+        if (cleanedEmail.startsWith("admin_")) {
+            cleanedEmail = cleanedEmail.substring(6);
+        }
+
+        // 2. Ignore test IDs (contains '.admin' or contains 'director@')
+        if (cleanedEmail.includes(".admin") || cleanedEmail.includes("director@")) {
+            return;
+        }
+
+        // 3. Simple validation & uniqueness
+        if (cleanedEmail.includes("@") && cleanedEmail.includes(".") && !cleaned.includes(cleanedEmail)) {
+            cleaned.push(cleanedEmail);
+        }
+    });
+    return cleaned;
+};
+
 // Helper to send work log submission email via Brevo HTTP API
 const sendSubmissionEmail = (user_mail, department, date, rawData) => {
     if (!db || !user_mail) return;
@@ -3761,16 +3792,13 @@ const sendSubmissionEmail = (user_mail, department, date, rawData) => {
         if (err || empRows.length === 0) return;
         const employeeName = empRows[0].User_Name || "Employee";
 
-        // 2. Fetch Project Leads of the department & global Admins & Directors
+        // 2. Fetch Project Leads & Admins & Directors of the SAME department only
         const leadsSql = `
             SELECT User_Mail, Role, Designation 
             FROM mis_user_data 
             WHERE is_archived = 0 
-              AND (
-                (LOWER(TRIM(Department)) = LOWER(TRIM(?)) AND Designation = 'Project Lead') 
-                OR Role = 'Admin' 
-                OR Role = 'Director'
-              )
+              AND LOWER(TRIM(Department)) = LOWER(TRIM(?))
+              AND (Designation = 'Project Lead' OR Role = 'Admin' OR Role = 'Director')
         `;
         db.query(leadsSql, [department], (err, leadRows) => {
             if (err) {
@@ -3778,12 +3806,14 @@ const sendSubmissionEmail = (user_mail, department, date, rawData) => {
                 return;
             }
 
-            const recipients = [user_mail];
+            const rawRecipients = [user_mail];
             leadRows.forEach(r => {
-                if (r.User_Mail && !recipients.includes(r.User_Mail)) {
-                    recipients.push(r.User_Mail);
+                if (r.User_Mail) {
+                    rawRecipients.push(r.User_Mail);
                 }
             });
+            const recipients = cleanEmailRecipients(rawRecipients);
+            if (recipients.length === 0) return;
 
             // 3. Format the fields from rawData
             let tableRowsHtml = "";
