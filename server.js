@@ -1176,8 +1176,8 @@ if (
     }
 
     res.json({
-      success:true,
-      message:"Anti Money Laundering submitted successfully"
+      success: true,
+      message: "Anti Money Laundering submitted successfully"
     });
 
     sendSubmissionEmail(data.user_mail, data.department, data.date, data);
@@ -1189,7 +1189,7 @@ if (
 /* ======================
    CRON JOB: CHECK DATA FILING DUES & SUMMARIES
 ====================== */
-const executeDuesCheckLogic = (res = null) => {
+const executeDuesCheckLogic = (runType = "night", res = null) => {
     if (!db) {
         if (res) return res.status(500).json({ error: "Database not connected" });
         return;
@@ -1291,100 +1291,113 @@ const executeDuesCheckLogic = (res = null) => {
                         // If no one is due and no one filled, skip
                         if (deptResults.length === 0) return resolveDept();
 
-                        // Send summary email to managers
-                        const managerEmails = cleanEmailRecipients(managers.map(m => m.User_Mail));
-                        
+                        // 1. NIGHT RUN: Send summary email to managers
                         const sendDeptEmailPromise = new Promise((resolveSend) => {
-                            if (managerEmails.length > 0) {
-                                const formattedDate = todayDate.toLocaleDateString("en-US", {
-                                    weekday: 'long',
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric'
-                                });
+                            if (runType === "night" && managers.length > 0) {
+                                const managerEmails = cleanEmailRecipients(managers.map(m => m.User_Mail));
+                                if (managerEmails.length > 0) {
+                                    const formattedDate = todayDate.toLocaleDateString("en-US", {
+                                        weekday: 'long',
+                                        year: 'numeric',
+                                        month: 'long',
+                                        day: 'numeric'
+                                    });
 
-                                let due1Rows = due1.map(e => `<li>🔴 <strong>${e.User_Name}</strong> (${e.User_Mail}) - Last filled: ${e.lastDate ? new Date(e.lastDate).toLocaleDateString() : 'Never'}</li>`).join("");
-                                let due3Rows = due3.map(e => `<li>🚨 <strong>${e.User_Name}</strong> (${e.User_Mail}) - Last filled: ${e.lastDate ? new Date(e.lastDate).toLocaleDateString() : 'Never'}</li>`).join("");
-                                let filledRows = filled.map(e => `<li>🟢 <strong>${e.User_Name}</strong> (${e.User_Mail}) - Filled today successfully</li>`).join("");
+                                    let due1Rows = due1.map(e => `<li>🔴 <strong>${e.User_Name}</strong> (${e.User_Mail}) - Last filled: ${e.lastDate ? new Date(e.lastDate).toLocaleDateString() : 'Never'}</li>`).join("");
+                                    let due3Rows = due3.map(e => `<li>🚨 <strong>${e.User_Name}</strong> (${e.User_Mail}) - Last filled: ${e.lastDate ? new Date(e.lastDate).toLocaleDateString() : 'Never'}</li>`).join("");
+                                    let filledRows = filled.map(e => `<li>🟢 <strong>${e.User_Name}</strong> (${e.User_Mail}) - Filled today successfully</li>`).join("");
 
-                                const deptHtml = `
-                                    <div style="font-family: 'Inter', system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
-                                        <h2 style="color: #0f172a; margin: 0 0 15px 0; font-size: 20px; font-weight: 700; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Filing Status Summary: ${dept}</h2>
-                                        <p style="color: #64748b; font-size: 13px;">Daily status report for ${formattedDate}</p>
-                                        
-                                        <div style="background-color: #ffffff; border-radius: 8px; padding: 15px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
-                                            <h3 style="color: #dc2626; font-size: 14px; font-weight: 600; margin: 0 0 10px 0;">🚨 Pending (3+ Days Due)</h3>
-                                            <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #475569; line-height: 1.5;">
-                                                ${due3Rows || '<li>None</li>'}
-                                            </ul>
+                                    const deptHtml = `
+                                        <div style="font-family: 'Inter', system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+                                            <h2 style="color: #0f172a; margin: 0 0 15px 0; font-size: 20px; font-weight: 700; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Filing Status Summary: ${dept}</h2>
+                                            <p style="color: #64748b; font-size: 13px;">Daily status report for ${formattedDate}</p>
+                                            
+                                            <div style="background-color: #ffffff; border-radius: 8px; padding: 15px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
+                                                <h3 style="color: #dc2626; font-size: 14px; font-weight: 600; margin: 0 0 10px 0;">🚨 Pending (3+ Days Due)</h3>
+                                                <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #475569; line-height: 1.5;">
+                                                    ${due3Rows || '<li>None</li>'}
+                                                </ul>
+                                            </div>
+                                            
+                                            <div style="background-color: #ffffff; border-radius: 8px; padding: 15px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
+                                                <h3 style="color: #ea580c; font-size: 14px; font-weight: 600; margin: 0 0 10px 0;">🔴 Pending (1-2 Days Due)</h3>
+                                                <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #475569; line-height: 1.5;">
+                                                    ${due1Rows || '<li>None</li>'}
+                                                </ul>
+                                            </div>
+                                            
+                                            <div style="background-color: #ffffff; border-radius: 8px; padding: 15px; border: 1px solid #e2e8f0;">
+                                                <h3 style="color: #16a34a; font-size: 14px; font-weight: 600; margin: 0 0 10px 0;">🟢 Completed Today</h3>
+                                                <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #475569; line-height: 1.5;">
+                                                    ${filledRows || '<li>None</li>'}
+                                                </ul>
+                                            </div>
                                         </div>
-                                        
-                                        <div style="background-color: #ffffff; border-radius: 8px; padding: 15px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
-                                            <h3 style="color: #ea580c; font-size: 14px; font-weight: 600; margin: 0 0 10px 0;">🔴 Pending (1-2 Days Due)</h3>
-                                            <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #475569; line-height: 1.5;">
-                                                ${due1Rows || '<li>None</li>'}
-                                            </ul>
-                                        </div>
-                                        
-                                        <div style="background-color: #ffffff; border-radius: 8px; padding: 15px; border: 1px solid #e2e8f0;">
-                                            <h3 style="color: #16a34a; font-size: 14px; font-weight: 600; margin: 0 0 10px 0;">🟢 Completed Today</h3>
-                                            <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #475569; line-height: 1.5;">
-                                                ${filledRows || '<li>None</li>'}
-                                            </ul>
-                                        </div>
-                                    </div>
-                                `;
+                                    `;
 
-                                fetch("https://api.brevo.com/v3/smtp/email", {
-                                    method: "POST",
-                                    headers: {
-                                        "accept": "application/json",
-                                        "api-key": process.env.BREVO_API_KEY || "",
-                                        "content-type": "application/json"
-                                    },
-                                    body: JSON.stringify({
-                                        sender: { name: "Pixeltruth Scheduler", email: "pixeltruth.notify@gmail.com" },
-                                        to: managerEmails.map(email => ({ email })),
-                                        subject: `📊 Filing Summary [${dept}]: ${formattedDate}`,
-                                        htmlContent: deptHtml
-                                    })
-                                }).then(() => {
-                                    console.log(`✅ Sent department summary for ${dept} to leads.`);
+                                    fetch("https://api.brevo.com/v3/smtp/email", {
+                                        method: "POST",
+                                        headers: {
+                                            "accept": "application/json",
+                                            "api-key": process.env.BREVO_API_KEY || "",
+                                            "content-type": "application/json"
+                                        },
+                                        body: JSON.stringify({
+                                            sender: { name: "Pixeltruth Scheduler", email: "pixeltruth.notify@gmail.com" },
+                                            to: managerEmails.map(email => ({ email })),
+                                            subject: `📊 Filing Summary [${dept}]: ${formattedDate}`,
+                                            htmlContent: deptHtml
+                                        })
+                                    }).then(() => {
+                                        console.log(`✅ Sent department summary for ${dept} to leads.`);
+                                        resolveSend();
+                                    }).catch(err => {
+                                        console.error(`❌ Failed to send department summary for ${dept}:`, err);
+                                        resolveSend();
+                                    });
+                                } else {
                                     resolveSend();
-                                }).catch(err => {
-                                    console.error(`❌ Failed to send department summary for ${dept}:`, err);
-                                    resolveSend();
-                                });
+                                }
                             } else {
                                 resolveSend();
                             }
                         });
 
-                        // Send individual warning email directly to due employees
+                        // 2. MORNING/EVENING RUN: Send individual warnings direct to employee with Project Leads CC'd
                         const individualPromises = deptResults.filter(r => r.diffDays >= 1).map(dueEmp => {
                             return new Promise((resolveWarning) => {
+                                if (runType !== "morning" && runType !== "evening") {
+                                    return resolveWarning();
+                                }
+
+                                // Fetch project leads for the department
+                                const pLeads = managers.filter(m => m.Designation === 'Project Lead').map(m => m.User_Mail);
+                                const rawRecipients = [dueEmp.User_Mail, ...pLeads];
+                                const recipients = cleanEmailRecipients(rawRecipients);
+
+                                if (recipients.length === 0) return resolveWarning();
+
+                                const timeLabel = runType === "morning" ? "Morning Reminder (10:00 AM)" : "Evening Reminder (4:00 PM)";
+
                                 const warnHtml = `
                                     <div style="font-family: 'Inter', system-ui, -apple-system, sans-serif; max-width: 550px; margin: 0 auto; padding: 25px; background-color: #fffaf0; border-radius: 12px; border: 1px solid #fbd38d;">
-                                        <h2 style="color: #dd6b20; margin: 0 0 10px 0; font-size: 18px; font-weight: 700;">⚠️ Daily Log Filing Warning</h2>
+                                        <div style="text-align: center; margin-bottom: 15px;">
+                                            <span style="background-color: #feebc8; color: #c05621; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 100px; text-transform: uppercase;">${timeLabel}</span>
+                                        </div>
+                                        <h2 style="color: #dd6b20; margin: 0 0 10px 0; font-size: 18px; font-weight: 700; text-align: center;">⚠️ Daily Work Log Due Alert</h2>
                                         <p style="color: #4a5568; font-size: 14px; line-height: 1.6;">
                                             Hello <strong>${dueEmp.User_Name}</strong>,<br><br>
-                                            Our records show that you have not submitted your daily work logs for the last <strong>${dueEmp.diffDays} day(s)</strong>.
+                                            This is a reminder that you have not submitted your daily work logs for the last <strong>${dueEmp.diffDays} day(s)</strong>.
                                         </p>
                                         <div style="background: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 15px; font-size: 13px;">
                                             <strong>Last submission:</strong> ${dueEmp.lastDate ? new Date(dueEmp.lastDate).toLocaleDateString() : 'Never'}<br>
                                             <strong>Department:</strong> ${dueEmp.Department}
                                         </div>
-                                        <p style="color: #718096; font-size: 12px; margin-top: 20px;">
+                                        <p style="color: #718096; font-size: 12px; margin-top: 20px; text-align: center; font-style: italic;">
                                             Please make sure to fill your daily logs as soon as possible to keep your attendance and records up to date.
                                         </p>
                                     </div>
                                 `;
-
-                                const cleanedEmpList = cleanEmailRecipients([dueEmp.User_Mail]);
-                                if (cleanedEmpList.length === 0) {
-                                    return resolveWarning();
-                                }
-                                const targetEmail = cleanedEmpList[0];
 
                                 fetch("https://api.brevo.com/v3/smtp/email", {
                                     method: "POST",
@@ -1395,14 +1408,15 @@ const executeDuesCheckLogic = (res = null) => {
                                     },
                                     body: JSON.stringify({
                                         sender: { name: "Pixeltruth Scheduler", email: "pixeltruth.notify@gmail.com" },
-                                        to: [{ email: targetEmail, name: dueEmp.User_Name }],
-                                        subject: `⚠️ Action Required: Daily Work Log Due Alert`,
+                                        to: recipients.map(email => ({ email })),
+                                        subject: `⚠️ Reminder: Daily Work Log Due - ${dueEmp.User_Name}`,
                                         htmlContent: warnHtml
                                     })
                                 }).then(() => {
+                                    console.log(`✅ Sent individual warning to employee: ${dueEmp.User_Mail} and Project Leads.`);
                                     resolveWarning();
                                 }).catch(err => {
-                                    console.error(`❌ Failed to send individual due warning to ${targetEmail}:`, err);
+                                    console.error(`❌ Failed to send individual due warning to ${recipients}:`, err);
                                     resolveWarning();
                                 });
                             });
@@ -1416,7 +1430,12 @@ const executeDuesCheckLogic = (res = null) => {
             });
 
             Promise.all(deptPromises).then(() => {
-                // Send global daily summary report to Directors and global Admins
+                // 3. NIGHT RUN: Send global daily summary report to Directors and global Admins
+                if (runType !== "night") {
+                    if (res) return res.json({ success: true, message: `${runType} notifications sent successfully.` });
+                    return;
+                }
+
                 const globalSql = `SELECT User_Mail FROM mis_user_data WHERE is_archived = 0 AND (Role = 'Director' OR Role = 'Admin')`;
                 db.query(globalSql, (err, directors) => {
                     if (err || directors.length === 0) {
@@ -1530,25 +1549,28 @@ const runDuesCheckIfNeeded = () => {
     if (!db) return;
     
     const todayStr = new Date().toISOString().split('T')[0];
+    const currentHour = new Date().getHours();
 
-    db.query("SELECT last_run_date FROM mis_cron_status ORDER BY id DESC LIMIT 1", (err, rows) => {
-        if (err) return;
+    let currentRunType = "";
+    if (currentHour >= 18) {
+        currentRunType = "night";
+    } else if (currentHour >= 16) {
+        currentRunType = "evening";
+    } else if (currentHour >= 10) {
+        currentRunType = "morning";
+    }
 
-        const lastRun = rows.length > 0 ? rows[0].last_run_date : "";
-        if (lastRun === todayStr) return; // Already ran today
+    if (!currentRunType) return;
 
-        const currentHour = new Date().getHours();
-        const isDifferentDay = lastRun !== todayStr;
+    db.query("SELECT id FROM mis_cron_status WHERE last_run_date = ? AND run_type = ? LIMIT 1", [todayStr, currentRunType], (err, rows) => {
+        if (err || rows.length > 0) return;
 
-        // Run if past 6:00 PM (18h) or if we completely missed a previous day
-        if (currentHour >= 18 || (isDifferentDay && lastRun !== "")) {
-            const insertSql = "INSERT INTO mis_cron_status (last_run_date) VALUES (?)";
-            db.query(insertSql, [todayStr], (err) => {
-                if (err) return;
-                console.log("⏰ Auto-Cron: Triggering background dues check and summaries...");
-                executeDuesCheckLogic();
-            });
-        }
+        const insertSql = "INSERT INTO mis_cron_status (last_run_date, run_type) VALUES (?, ?)";
+        db.query(insertSql, [todayStr, currentRunType], (err) => {
+            if (err) return;
+            console.log(`⏰ Auto-Cron: Triggering ${currentRunType} dues check...`);
+            executeDuesCheckLogic(currentRunType);
+        });
     });
 };
 
