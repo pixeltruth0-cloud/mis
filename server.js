@@ -4,6 +4,7 @@ const mysql = require("mysql2");
 const cors = require("cors");
 const multer = require("multer");
 const helmet = require("helmet");
+const nodemailer = require("nodemailer");
 
 const app = express();
 const upload = multer();
@@ -3362,6 +3363,126 @@ app.get("/getAssignedShifts", (req, res) => {
 
 });
 
+// Create nodemailer transporter using environment variables (fallback to safe logging)
+const mailTransporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || "smtp.gmail.com",
+    port: parseInt(process.env.EMAIL_PORT || "587"),
+    secure: (process.env.EMAIL_SECURE === "true"), // true for 465, false for other ports
+    auth: {
+        user: process.env.EMAIL_USER || "pixeltruth.notify@gmail.com",
+        pass: process.env.EMAIL_PASS || "buujwksynehaqxnk"
+    }
+});
+
+// Helper to send Shift email notification
+const sendShiftEmailNotification = (user_mail, shift_id, shift_date, assigned_by, group_id, notes, custom_label) => {
+    if (!db || !user_mail) return;
+
+    // 1. Get employee name
+    const empSql = "SELECT User_Name FROM mis_user_data WHERE User_Mail = ? LIMIT 1";
+    db.query(empSql, [user_mail], (err, empRows) => {
+        if (err || empRows.length === 0) return;
+        const employeeName = empRows[0].User_Name || "Employee";
+
+        // 2. Get shift details
+        const shiftSql = "SELECT shift_name, start_time, end_time FROM shift_master WHERE id = ? LIMIT 1";
+        db.query(shiftSql, [shift_id], (err, shiftRows) => {
+            if (err || shiftRows.length === 0) return;
+            const sName = shiftRows[0].shift_name || "Custom Timing";
+            const sStart = shiftRows[0].start_time || "";
+            const sEnd = shiftRows[0].end_time || "";
+
+            // 3. Get group name (if applicable)
+            let groupName = "Unnamed group";
+            const getGroup = (callback) => {
+                if (group_id && group_id !== "unnamed") {
+                    db.query("SELECT group_name FROM shift_groups WHERE id = ? LIMIT 1", [group_id], (err, gRows) => {
+                        if (!err && gRows.length > 0) {
+                            groupName = gRows[0].group_name;
+                        }
+                        callback();
+                    });
+                } else {
+                    callback();
+                }
+            };
+
+            getGroup(() => {
+                const formattedDate = new Date(shift_date).toLocaleDateString("en-US", {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+
+                const mailOptions = {
+                    from: `"Pixeltruth Scheduler" <${process.env.EMAIL_USER || 'pixeltruth.notify@gmail.com'}>`,
+                    to: user_mail,
+                    subject: `🚨 New Shift Assigned: ${formattedDate}`,
+                    html: `
+                        <div style="font-family: 'Inter', system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; background-color: #f8fafc; border-radius: 16px; border: 1px solid #e2e8f0;">
+                            <div style="text-align: center; margin-bottom: 25px;">
+                                <h2 style="color: #0f172a; margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em;">New Shift Assignment</h2>
+                                <p style="color: #64748b; font-size: 14px; margin-top: 6px;">You have been assigned a new shift in the schedule</p>
+                            </div>
+                            
+                            <div style="background-color: #ffffff; border-radius: 12px; padding: 25px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+                                <h3 style="margin-top: 0; color: #1e293b; font-size: 16px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; font-weight: 600;">Shift Details</h3>
+                                
+                                <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #475569;">
+                                    <tr>
+                                        <td style="padding: 8px 0; font-weight: 500; color: #64748b; width: 120px;">Employee</td>
+                                        <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${employeeName}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 8px 0; font-weight: 500; color: #64748b;">Shift Date</td>
+                                        <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${formattedDate}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 8px 0; font-weight: 500; color: #64748b;">Shift Time</td>
+                                        <td style="padding: 8px 0; color: #2563eb; font-weight: 600;">${sStart} - ${sEnd} (${sName})</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 8px 0; font-weight: 500; color: #64748b;">Team/Group</td>
+                                        <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${groupName}</td>
+                                    </tr>
+                                    ${custom_label ? `
+                                    <tr>
+                                        <td style="padding: 8px 0; font-weight: 500; color: #64748b;">Custom Label</td>
+                                        <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${custom_label}</td>
+                                    </tr>` : ''}
+                                    ${notes ? `
+                                    <tr>
+                                        <td style="padding: 8px 0; font-weight: 500; color: #64748b; vertical-align: top;">Notes</td>
+                                        <td style="padding: 8px 0; color: #475569; font-style: italic;">${notes}</td>
+                                    </tr>` : ''}
+                                    ${assigned_by ? `
+                                    <tr>
+                                        <td style="padding: 8px 0; font-weight: 500; color: #64748b;">Assigned By</td>
+                                        <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${assigned_by}</td>
+                                    </tr>` : ''}
+                                </table>
+                            </div>
+                            
+                            <div style="text-align: center; margin-top: 30px; font-size: 12px; color: #94a3b8;">
+                                <p style="margin: 0;">This is an automated notification from Pixeltruth MIS Portal.</p>
+                            </div>
+                        </div>
+                    `
+                };
+
+                mailTransporter.sendMail(mailOptions, (error, info) => {
+                    if (error) {
+                        console.error("❌ Error sending shift notification email:", error);
+                    } else {
+                        console.log("✅ Shift notification email sent successfully to:", user_mail, info.response);
+                    }
+                });
+            });
+        });
+    });
+};
+
 /* ==========================
    ASSIGN SHIFT
 ========================== */
@@ -3463,6 +3584,9 @@ app.post("/assignShift", (req, res) => {
                     success: true,
                     message: "Shift Assigned Successfully"
                 });
+
+                // Send email notification asynchronously
+                sendShiftEmailNotification(user_mail, shift_id, shift_date, assigned_by, group_id, notes, custom_label);
             }
         );
     }
@@ -3538,6 +3662,9 @@ app.put("/updateShift", (req, res) => {
                 success: true,
                 message: "Shift Updated"
             });
+
+            // Send email notification asynchronously
+            sendShiftEmailNotification(user_mail, shift_id, shift_date, null, group_id, notes, custom_label);
         }
     );
 });
