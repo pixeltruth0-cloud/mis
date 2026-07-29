@@ -60,6 +60,62 @@ if (!process.env.DATABASE_URL) {
 
   console.log("✅ DB Pool connected");
 
+  // Programmatic migration to ensure user_mail unique constraint is updated to (group_id, user_mail)
+  const migrateGroupConstraints = () => {
+    db.query("SHOW INDEX FROM shift_group_members", (err, indexes) => {
+      if (err) {
+        console.error("❌ Error checking shift_group_members indexes:", err);
+        return;
+      }
+      
+      const keyNames = [...new Set(indexes.map(idx => idx.Key_name))];
+      const uniqueKeysOnUserMailAlone = [];
+      let hasUniqueGroupMember = false;
+      
+      keyNames.forEach(keyName => {
+        const keyRows = indexes.filter(idx => idx.Key_name === keyName);
+        const isUnique = keyRows[0].Non_unique === 0;
+        if (keyName === 'unique_group_member') {
+          hasUniqueGroupMember = true;
+        } else if (isUnique && keyRows.length === 1 && keyRows[0].Column_name === 'user_mail') {
+          uniqueKeysOnUserMailAlone.push(keyName);
+        }
+      });
+
+      if (uniqueKeysOnUserMailAlone.length > 0) {
+        console.log("ℹ️ Found unique constraints on user_mail alone:", uniqueKeysOnUserMailAlone);
+        const dropNext = (idx) => {
+          if (idx >= uniqueKeysOnUserMailAlone.length) {
+            if (!hasUniqueGroupMember) {
+              console.log("ℹ️ Adding unique constraint (group_id, user_mail)...");
+              db.query("ALTER TABLE shift_group_members ADD UNIQUE KEY unique_group_member (group_id, user_mail)", (err) => {
+                if (err) console.error("❌ Failed to add unique_group_member constraint:", err);
+                else console.log("✅ Successfully added unique_group_member constraint!");
+              });
+            }
+            return;
+          }
+          const keyName = uniqueKeysOnUserMailAlone[idx];
+          db.query(`ALTER TABLE shift_group_members DROP INDEX \`${keyName}\``, (err) => {
+            if (err) console.error(`❌ Failed to drop unique index ${keyName}:`, err);
+            else console.log(`✅ Successfully dropped unique index ${keyName}!`);
+            dropNext(idx + 1);
+          });
+        };
+        dropNext(0);
+      } else if (!hasUniqueGroupMember) {
+        console.log("ℹ️ Adding unique constraint (group_id, user_mail)...");
+        db.query("ALTER TABLE shift_group_members ADD UNIQUE KEY unique_group_member (group_id, user_mail)", (err) => {
+          if (err) console.error("❌ Failed to add unique_group_member constraint:", err);
+          else console.log("✅ Successfully added unique_group_member constraint!");
+        });
+      } else {
+        console.log("✅ DB schema constraints for shift_group_members are already up to date.");
+      }
+    });
+  };
+  migrateGroupConstraints();
+
   // 🔥 Error handling (VERY IMPORTANT)
   db.on("error", (err) => {
     console.error("❌ DB Pool Error:", err.message);
