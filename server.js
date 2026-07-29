@@ -3363,18 +3363,7 @@ app.get("/getAssignedShifts", (req, res) => {
 
 });
 
-// Create nodemailer transporter using environment variables (fallback to safe logging)
-const mailTransporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || "smtp.gmail.com",
-    port: parseInt(process.env.EMAIL_PORT || "587"),
-    secure: (process.env.EMAIL_SECURE === "true"), // true for 465, false for other ports
-    auth: {
-        user: process.env.EMAIL_USER || "pixeltruth.notify@gmail.com",
-        pass: process.env.EMAIL_PASS || "buujwksynehaqxnk"
-    }
-});
-
-// Helper to send Shift email notification
+// Helper to send Shift email notification via Brevo HTTP API
 const sendShiftEmailNotification = (user_mail, shift_id, shift_date, assigned_by, group_id, notes, custom_label) => {
     if (!db || !user_mail) return;
 
@@ -3415,68 +3404,92 @@ const sendShiftEmailNotification = (user_mail, shift_id, shift_date, assigned_by
                     day: 'numeric'
                 });
 
-                const mailOptions = {
-                    from: `"Pixeltruth Scheduler" <${process.env.EMAIL_USER || 'pixeltruth.notify@gmail.com'}>`,
-                    to: user_mail,
-                    subject: `🚨 New Shift Assigned: ${formattedDate}`,
-                    html: `
-                        <div style="font-family: 'Inter', system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; background-color: #f8fafc; border-radius: 16px; border: 1px solid #e2e8f0;">
-                            <div style="text-align: center; margin-bottom: 25px;">
-                                <h2 style="color: #0f172a; margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em;">New Shift Assignment</h2>
-                                <p style="color: #64748b; font-size: 14px; margin-top: 6px;">You have been assigned a new shift in the schedule</p>
-                            </div>
-                            
-                            <div style="background-color: #ffffff; border-radius: 12px; padding: 25px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
-                                <h3 style="margin-top: 0; color: #1e293b; font-size: 16px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; font-weight: 600;">Shift Details</h3>
-                                
-                                <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #475569;">
-                                    <tr>
-                                        <td style="padding: 8px 0; font-weight: 500; color: #64748b; width: 120px;">Employee</td>
-                                        <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${employeeName}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding: 8px 0; font-weight: 500; color: #64748b;">Shift Date</td>
-                                        <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${formattedDate}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding: 8px 0; font-weight: 500; color: #64748b;">Shift Time</td>
-                                        <td style="padding: 8px 0; color: #2563eb; font-weight: 600;">${sStart} - ${sEnd} (${sName})</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding: 8px 0; font-weight: 500; color: #64748b;">Team/Group</td>
-                                        <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${groupName}</td>
-                                    </tr>
-                                    ${custom_label ? `
-                                    <tr>
-                                        <td style="padding: 8px 0; font-weight: 500; color: #64748b;">Custom Label</td>
-                                        <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${custom_label}</td>
-                                    </tr>` : ''}
-                                    ${notes ? `
-                                    <tr>
-                                        <td style="padding: 8px 0; font-weight: 500; color: #64748b; vertical-align: top;">Notes</td>
-                                        <td style="padding: 8px 0; color: #475569; font-style: italic;">${notes}</td>
-                                    </tr>` : ''}
-                                    ${assigned_by ? `
-                                    <tr>
-                                        <td style="padding: 8px 0; font-weight: 500; color: #64748b;">Assigned By</td>
-                                        <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${assigned_by}</td>
-                                    </tr>` : ''}
-                                </table>
-                            </div>
-                            
-                            <div style="text-align: center; margin-top: 30px; font-size: 12px; color: #94a3b8;">
-                                <p style="margin: 0;">This is an automated notification from Pixeltruth MIS Portal.</p>
-                            </div>
+                const htmlContent = `
+                    <div style="font-family: 'Inter', system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; background-color: #f8fafc; border-radius: 16px; border: 1px solid #e2e8f0;">
+                        <div style="text-align: center; margin-bottom: 25px;">
+                            <h2 style="color: #0f172a; margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em;">New Shift Assignment</h2>
+                            <p style="color: #64748b; font-size: 14px; margin-top: 6px;">You have been assigned a new shift in the schedule</p>
                         </div>
-                    `
-                };
+                        
+                        <div style="background-color: #ffffff; border-radius: 12px; padding: 25px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+                            <h3 style="margin-top: 0; color: #1e293b; font-size: 16px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; font-weight: 600;">Shift Details</h3>
+                            
+                            <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #475569;">
+                                <tr>
+                                    <td style="padding: 8px 0; font-weight: 500; color: #64748b; width: 120px;">Employee</td>
+                                    <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${employeeName}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0; font-weight: 500; color: #64748b;">Shift Date</td>
+                                    <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${formattedDate}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0; font-weight: 500; color: #64748b;">Shift Time</td>
+                                    <td style="padding: 8px 0; color: #2563eb; font-weight: 600;">${sStart} - ${sEnd} (${sName})</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0; font-weight: 500; color: #64748b;">Team/Group</td>
+                                    <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${groupName}</td>
+                                </tr>
+                                ${custom_label ? `
+                                <tr>
+                                    <td style="padding: 8px 0; font-weight: 500; color: #64748b;">Custom Label</td>
+                                    <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${custom_label}</td>
+                                </tr>` : ''}
+                                ${notes ? `
+                                <tr>
+                                    <td style="padding: 8px 0; font-weight: 500; color: #64748b; vertical-align: top;">Notes</td>
+                                    <td style="padding: 8px 0; color: #475569; font-style: italic;">${notes}</td>
+                                </tr>` : ''}
+                                ${assigned_by ? `
+                                <tr>
+                                    <td style="padding: 8px 0; font-weight: 500; color: #64748b;">Assigned By</td>
+                                    <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${assigned_by}</td>
+                                </tr>` : ''}
+                            </table>
+                        </div>
+                        
+                        <div style="text-align: center; margin-top: 30px; font-size: 12px; color: #94a3b8;">
+                            <p style="margin: 0;">This is an automated notification from Pixeltruth MIS Portal.</p>
+                        </div>
+                    </div>
+                `;
 
-                mailTransporter.sendMail(mailOptions, (error, info) => {
-                    if (error) {
-                        console.error("❌ Error sending shift notification email:", error);
-                    } else {
-                        console.log("✅ Shift notification email sent successfully to:", user_mail, info.response);
+                fetch("https://api.brevo.com/v3/smtp/email", {
+                    method: "POST",
+                    headers: {
+                        "accept": "application/json",
+                        "api-key": process.env.BREVO_API_KEY || "",
+                        "content-type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        sender: {
+                            name: "Pixeltruth Scheduler",
+                            email: "pixeltruth.notify@gmail.com"
+                        },
+                        to: [
+                            {
+                                email: user_mail,
+                                name: employeeName
+                            }
+                        ],
+                        subject: `🚨 New Shift Assigned: ${formattedDate}`,
+                        htmlContent: htmlContent
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.text().then(text => {
+                            throw new Error(`Brevo HTTP Error: ${response.status} - ${text}`);
+                        });
                     }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log("✅ Shift notification email sent successfully via Brevo HTTP API to:", user_mail, data);
+                })
+                .catch(error => {
+                    console.error("❌ Error sending shift notification email via Brevo HTTP API:", error);
                 });
             });
         });
