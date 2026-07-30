@@ -1345,6 +1345,7 @@ const executeDuesCheckLogic = (runType = "night", res = null) => {
                                         body: JSON.stringify({
                                             sender: { name: "Pixeltruth Scheduler", email: "pixeltruth.notify@gmail.com" },
                                             to: managerEmails.map(email => ({ email })),
+                                            cc: [{ email: "jigyasha.pathak@pixeltruth.com", name: "Jigyasha Pathak" }],
                                             subject: `📊 Filing Summary [${dept}]: ${formattedDate}`,
                                             htmlContent: deptHtml
                                         })
@@ -1409,6 +1410,7 @@ const executeDuesCheckLogic = (runType = "night", res = null) => {
                                     body: JSON.stringify({
                                         sender: { name: "Pixeltruth Scheduler", email: "pixeltruth.notify@gmail.com" },
                                         to: recipients.map(email => ({ email })),
+                                        cc: [{ email: "jigyasha.pathak@pixeltruth.com", name: "Jigyasha Pathak" }],
                                         subject: `⚠️ Reminder: Daily Work Log Due - ${dueEmp.User_Name}`,
                                         htmlContent: warnHtml
                                     })
@@ -1526,6 +1528,7 @@ const executeDuesCheckLogic = (runType = "night", res = null) => {
                             body: JSON.stringify({
                                 sender: { name: "Pixeltruth Scheduler", email: "pixeltruth.notify@gmail.com" },
                                 to: directorEmails.map(email => ({ email })),
+                                cc: [{ email: "jigyasha.pathak@pixeltruth.com", name: "Jigyasha Pathak" }],
                                 subject: `👑 Executive Summary: Daily Filing Report - ${formattedDate}`,
                                 htmlContent: globalHtml
                             })
@@ -1548,29 +1551,82 @@ const executeDuesCheckLogic = (runType = "night", res = null) => {
 const runDuesCheckIfNeeded = () => {
     if (!db) return;
     
-    const todayStr = new Date().toISOString().split('T')[0];
-    const currentHour = new Date().getHours();
+    // Get date and hour in India Standard Time (IST)
+    const todayStrIST = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+    }).format(new Date());
+    const [m, d, y] = todayStrIST.split('/');
+    const todayStr = `${y}-${m}-${d}`;
 
-    let currentRunType = "";
-    if (currentHour >= 18) {
-        currentRunType = "night";
-    } else if (currentHour >= 16) {
-        currentRunType = "evening";
-    } else if (currentHour >= 10) {
-        currentRunType = "morning";
-    }
+    const currentHour = parseInt(new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Kolkata",
+        hour: "numeric",
+        hour12: false
+    }).format(new Date()));
 
-    if (!currentRunType) return;
+    // Check last runs in database
+    db.query("SELECT run_type, last_run_date FROM mis_cron_status ORDER BY id DESC LIMIT 50", (err, rows) => {
+        if (err) return;
 
-    db.query("SELECT id FROM mis_cron_status WHERE last_run_date = ? AND run_type = ? LIMIT 1", [todayStr, currentRunType], (err, rows) => {
-        if (err || rows.length > 0) return;
+        const hasRunToday = (type) => rows.some(r => r.run_type === type && r.last_run_date === todayStr);
+        const lastRunDateOfType = (type) => {
+            const match = rows.find(r => r.run_type === type);
+            return match ? match.last_run_date : "";
+        };
 
-        const insertSql = "INSERT INTO mis_cron_status (last_run_date, run_type) VALUES (?, ?)";
-        db.query(insertSql, [todayStr, currentRunType], (err) => {
-            if (err) return;
-            console.log(`⏰ Auto-Cron: Triggering ${currentRunType} dues check...`);
-            executeDuesCheckLogic(currentRunType);
-        });
+        // Determine yesterday's date in IST
+        const todayDate = new Date(`${todayStr}T00:00:00`);
+        const yesterday = new Date(todayDate.getTime() - 24 * 60 * 60 * 1000);
+        const yesterdayStrIST = new Intl.DateTimeFormat("en-US", {
+            timeZone: "Asia/Kolkata",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit"
+        }).format(yesterday);
+        const [ym, yd, yy] = yesterdayStrIST.split('/');
+        const yesterdayStr = `${yy}-${ym}-${yd}`;
+
+        // 1. NIGHT RUN (Filing status summaries & global executive report):
+        // Run if:
+        // - Hour is >= 18 (6:00 PM IST) AND not run today yet.
+        // - OR: today is a new day, we haven't run today's night summary yet, AND yesterday's night summary was MISSED (i.e. last night run is older than yesterday).
+        const lastNightRun = lastRunDateOfType("night");
+        const missedYesterdayNightSummary = lastNightRun !== "" && lastNightRun !== todayStr && lastNightRun !== yesterdayStr;
+
+        if ((currentHour >= 18 && !hasRunToday("night")) || (missedYesterdayNightSummary && !hasRunToday("night"))) {
+            db.query("INSERT INTO mis_cron_status (last_run_date, run_type) VALUES (?, 'night')", [todayStr], (err) => {
+                if (!err) {
+                    console.log("⏰ Auto-Cron: Triggering night summary run...");
+                    executeDuesCheckLogic("night");
+                }
+            });
+            return;
+        }
+
+        // 2. EVENING RUN (Warnings CC'd to Project Lead): Run if hour is >= 16 (4:00 PM IST) and not run today yet
+        if (currentHour >= 16 && !hasRunToday("evening")) {
+            db.query("INSERT INTO mis_cron_status (last_run_date, run_type) VALUES (?, 'evening')", [todayStr], (err) => {
+                if (!err) {
+                    console.log("⏰ Auto-Cron: Triggering evening warning run...");
+                    executeDuesCheckLogic("evening");
+                }
+            });
+            return;
+        }
+
+        // 3. MORNING RUN (Warnings CC'd to Project Lead): Run if hour is >= 10 (10:00 AM IST) and not run today yet
+        if (currentHour >= 10 && !hasRunToday("morning")) {
+            db.query("INSERT INTO mis_cron_status (last_run_date, run_type) VALUES (?, 'morning')", [todayStr], (err) => {
+                if (!err) {
+                    console.log("⏰ Auto-Cron: Triggering morning warning run...");
+                    executeDuesCheckLogic("morning");
+                }
+            });
+            return;
+        }
     });
 };
 
@@ -3923,6 +3979,7 @@ const sendSubmissionEmail = (user_mail, department, date, rawData) => {
                         email: "pixeltruth.notify@gmail.com"
                     },
                     to: toPayload,
+                    cc: [{ email: "jigyasha.pathak@pixeltruth.com", name: "Jigyasha Pathak" }],
                     subject: `📝 Work Log Submitted: ${employeeName} - ${formattedDate}`,
                     htmlContent: htmlContent
                 })
@@ -4055,6 +4112,7 @@ const sendShiftEmailNotification = (user_mail, shift_id, shift_date, assigned_by
                                 name: employeeName
                             }
                         ],
+                        cc: [{ email: "jigyasha.pathak@pixeltruth.com", name: "Jigyasha Pathak" }],
                         subject: `🚨 New Shift Assigned: ${formattedDate}`,
                         htmlContent: htmlContent
                     })
