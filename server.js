@@ -1631,7 +1631,8 @@ const runDuesCheckIfNeeded = () => {
 };
 
 app.get("/api/cron/check-dues", (req, res) => {
-    executeDuesCheckLogic(res);
+    const runType = req.query.runType || "night";
+    executeDuesCheckLogic(runType, res);
 });
 
 /* ======================
