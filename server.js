@@ -1271,8 +1271,11 @@ const executeDuesCheckLogic = (runType = "night", res = null) => {
                         SELECT User_Mail, Designation, Role 
                         FROM mis_user_data 
                         WHERE is_archived = 0 
+                          AND LOWER(TRIM(Department)) = LOWER(TRIM(?))
                           AND (
-                            (LOWER(TRIM(Department)) = LOWER(TRIM(?)) AND (Designation = 'Project Lead' OR Designation = 'Team Lead' OR Role = 'Team_Lead')) 
+                            Designation = 'Project Lead' 
+                            OR Designation = 'Team Lead' 
+                            OR Role = 'Team_Lead'
                             OR Role = 'Admin' 
                             OR Role = 'Director'
                           )
