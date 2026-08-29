@@ -696,7 +696,15 @@ const allowedColumns = [
 "Shopee_Count",
 "Shopee_hours",
 "Shopee_minutes",
-"Shopee_Remark"
+"Shopee_Remark",
+
+/* POC */
+"POC_Type_Of_Work",
+"POC_Platform",
+"POC_Count",
+"POC_hours",
+"POC_minutes",
+"POC_Remark"
 
 ];
 
