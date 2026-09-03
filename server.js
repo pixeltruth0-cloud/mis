@@ -417,6 +417,9 @@ app.post("/addUser", upload.none(), (req, res) => {
     return res.json({ success: false, message: "Missing fields" });
   }
 
+  const rawDept = req.body.Department || req.body.department || "";
+  const userDept = (rawDept && rawDept.trim()) ? rawDept.trim() : "Media_Monitoring";
+
   const sql = `
     INSERT INTO mis_user_data (
       Employee_ID,
@@ -434,24 +437,37 @@ app.post("/addUser", upload.none(), (req, res) => {
   `;
 
   const values = [
-    New_Employee_ID,
-    New_Name,
-    New_User_Mail,
+    New_Employee_ID.trim(),
+    New_Name.trim(),
+    New_User_Mail.trim(),
     New_Designation || "",
     New_Reporting_Person || "",
     New_Role,
     New_Number || "",
     New_Password,
-    req.body.Department || "Social_Media_N_Website_Audit"
+    userDept
   ];
 
   db.query(sql, values, (err) => {
     if (err) {
       console.error("❌ Add User Error:", err.message);
-      return res.json({ success: false });
+      let errMsg = "Failed to add user";
+      if (err.code === "ER_DUP_ENTRY" || (err.message && err.message.includes("Duplicate entry"))) {
+        errMsg = `User with email "${New_User_Mail}" already exists!`;
+      } else if (err.sqlMessage) {
+        errMsg = err.sqlMessage;
+      }
+      return res.json({ success: false, message: errMsg });
     }
 
-    res.json({ success: true });
+    // Also ensure department access mapping exists in user_departments
+    const deptMapSql = `INSERT IGNORE INTO user_departments (user_mail, department) VALUES (?, ?)`;
+    db.query(deptMapSql, [New_User_Mail.trim(), userDept], (deptErr) => {
+      if (deptErr) {
+        console.warn("⚠️ user_departments mapping insert warning:", deptErr.message);
+      }
+      res.json({ success: true, message: "User added successfully" });
+    });
   });
 });
 
