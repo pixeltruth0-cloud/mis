@@ -2680,21 +2680,23 @@ app.get("/getSuperAdminDashboardData", (req, res) => {
 
   if (!db) return res.json({ success:false });
 
-  const today = new Date().toISOString().split("T")[0];
+  // Get date in IST (UTC+5:30)
+  const istDate = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  const today = istDate.toISOString().split("T")[0];
 
   /* ===============================
      STEP 1 – GET ALL ACTIVE USERS
   =============================== */
 
   const usersQuery = `
-    SELECT User_Mail, Department
+    SELECT User_Mail, Department, User_Name
     FROM mis_user_data
     WHERE is_archived = 0
       AND Role NOT LIKE '%HR%'
-AND Role NOT LIKE '%Admin%'
-AND Role NOT LIKE '%Team_Lead%'
-AND Role NOT LIKE '%Director%'
-AND Role NOT LIKE '%HR Manager%'
+      AND Role NOT LIKE '%Admin%'
+      AND Role NOT LIKE '%Team_Lead%'
+      AND Role NOT LIKE '%Director%'
+      AND Role NOT LIKE '%HR Manager%'
   `;
 
   db.query(usersQuery, (err, users) => {
@@ -2705,7 +2707,7 @@ AND Role NOT LIKE '%HR Manager%'
     }
 
     if (!users.length) {
-      return res.json({ success:true, summary:{}, departments:[] });
+      return res.json({ success:true, summary:{}, departments:[], missingUsers:[] });
     }
 
     /* ===============================
@@ -2713,32 +2715,34 @@ AND Role NOT LIKE '%HR Manager%'
        FROM ALL TABLES USING UNION
     =============================== */
 
-const submissionQuery = `
-  SELECT DISTINCT user_mail FROM social_media_n_website_audit_data
-  WHERE DATE(date) = ?
+    const submissionQuery = `
+      SELECT DISTINCT user_mail FROM social_media_n_website_audit_data
+      WHERE DATE(date) = ?
 
-  UNION
+      UNION
 
-  SELECT DISTINCT user_mail FROM media_monitoring_data
-  WHERE DATE(date) = ?
+      SELECT DISTINCT user_mail FROM media_monitoring_data
+      WHERE DATE(date) = ?
 
-  UNION
+      UNION
 
-  SELECT DISTINCT user_mail FROM brand_infringement
-  WHERE DATE(date) = ?
+      SELECT DISTINCT user_mail FROM brand_infringement
+      WHERE DATE(date) = ?
 
-UNION
-SELECT DISTINCT user_mail FROM brand_affiliate WHERE DATE(date)=?
-  UNION
+      UNION
 
-  SELECT DISTINCT user_mail FROM anti_money_laundering_data
-  WHERE DATE(date) = ?
-`;
+      SELECT DISTINCT user_mail FROM brand_affiliate WHERE DATE(date)=?
+
+      UNION
+
+      SELECT DISTINCT user_mail FROM anti_money_laundering_data
+      WHERE DATE(date) = ?
+    `;
 
     db.query(
-  submissionQuery,
-  [today, today, today, today, today],
-  (err, submissions) => {
+      submissionQuery,
+      [today, today, today, today, today],
+      (err, submissions) => {
 
       if (err) {
         console.error("❌ Submission Query Error:", err.message);
@@ -2748,43 +2752,41 @@ SELECT DISTINCT user_mail FROM brand_affiliate WHERE DATE(date)=?
       /* ===============================
          STEP 3 – GET INACTIVE (3 DAYS)
       =============================== */
-const inactiveQuery = `
-  SELECT COUNT(*) AS inactiveUsers
-  FROM mis_user_data u
-  WHERE u.is_archived = 0
-    AND u.Role NOT IN ('HR','Admin','Team_Lead','Director','HR Manager')
-    AND NOT EXISTS (
-      SELECT 1 FROM social_media_n_website_audit_data s
-        WHERE s.user_mail = u.User_Mail
-        AND DATE(s.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
+      const inactiveQuery = `
+        SELECT COUNT(*) AS inactiveUsers
+        FROM mis_user_data u
+        WHERE u.is_archived = 0
+          AND u.Role NOT IN ('HR','Admin','Team_Lead','Director','HR Manager')
+          AND NOT EXISTS (
+            SELECT 1 FROM social_media_n_website_audit_data s
+              WHERE s.user_mail = u.User_Mail
+              AND DATE(s.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
 
-      UNION
+            UNION
 
-      SELECT 1 FROM media_monitoring_data m
-        WHERE m.user_mail = u.User_Mail
-        AND DATE(m.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
+            SELECT 1 FROM media_monitoring_data m
+              WHERE m.user_mail = u.User_Mail
+              AND DATE(m.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
 
-      UNION
+            UNION
 
-      UNION
+            SELECT 1 FROM brand_infringement b
+              WHERE b.user_mail = u.User_Mail
+              AND DATE(b.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
 
-SELECT 1 FROM brand_infringement b
-  WHERE b.user_mail = u.User_Mail
-  AND DATE(b.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
+            UNION
 
-UNION
+            SELECT 1 FROM brand_affiliate ba
+              WHERE ba.user_mail = u.User_Mail
+              AND DATE(ba.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
 
-SELECT 1 FROM brand_affiliate ba
-  WHERE ba.user_mail = u.User_Mail
-  AND DATE(ba.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
+            UNION
 
-UNION
-
-SELECT 1 FROM anti_money_laundering_data a
-  WHERE a.user_mail = u.User_Mail
-  AND DATE(a.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
-    )
-`;
+            SELECT 1 FROM anti_money_laundering_data a
+              WHERE a.user_mail = u.User_Mail
+              AND DATE(a.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
+          )
+      `;
 
       db.query(inactiveQuery, (err, inactiveRows) => {
 
@@ -2798,29 +2800,35 @@ SELECT 1 FROM anti_money_laundering_data a
         =============================== */
 
         const submittedSet = new Set(
-          submissions.map(s => s.user_mail)
+          submissions.map(s => (s.user_mail || "").toLowerCase().trim())
         );
 
-         console.log("TODAY:", today);
-console.log("USERS:", users);
-console.log("SUBMISSIONS:", submissions);
-console.log("INACTIVE:", inactiveRows);
         let departmentMap = {};
+        const missingUsers = [];
 
         users.forEach(u => {
+          const rawDept = (u.Department || "Other").trim();
+          const canonicalDept = rawDept.toLowerCase() === "media_monitoring" ? "Media_Monitoring" : rawDept;
 
-          if (!departmentMap[u.Department]) {
-            departmentMap[u.Department] = {
-              department: u.Department,
+          if (!departmentMap[canonicalDept]) {
+            departmentMap[canonicalDept] = {
+              department: canonicalDept,
               totalEmployees: 0,
               submittedToday: 0
             };
           }
 
-          departmentMap[u.Department].totalEmployees++;
+          departmentMap[canonicalDept].totalEmployees++;
 
-          if (submittedSet.has(u.User_Mail)) {
-            departmentMap[u.Department].submittedToday++;
+          const mail = (u.User_Mail || "").toLowerCase().trim();
+          if (submittedSet.has(mail)) {
+            departmentMap[canonicalDept].submittedToday++;
+          } else {
+            missingUsers.push({
+              name: u.User_Name || (u.User_Mail ? u.User_Mail.split("@")[0] : "Employee"),
+              email: u.User_Mail,
+              department: canonicalDept
+            });
           }
 
         });
@@ -2840,9 +2848,10 @@ console.log("INACTIVE:", inactiveRows);
             totalDepartments,
             totalEmployees,
             totalSubmittedToday,
-            inactiveUsers: inactiveRows[0].inactiveUsers
+            inactiveUsers: inactiveRows[0] ? inactiveRows[0].inactiveUsers : 0
           },
-          departments
+          departments,
+          missingUsers
         });
 
       });
