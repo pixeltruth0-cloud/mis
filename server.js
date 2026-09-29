@@ -314,59 +314,80 @@ app.get("/getDepartmentUsers", (req, res) => {
   let sql = "";
   let params = [];
 
-  /* DIRECTOR / HR MANAGER → ALL USERS */
+  /* DIRECTOR / HR MANAGER / SUPER ADMIN */
+  const includeArchived = req.query.include_archived === "true" || req.query.include_archived === "1";
+  const archiveCondition = includeArchived ? "1=1" : "COALESCE(u.is_archived, 0) = 0";
 
-  if (role === "Director" || role === "HR Manager") {
-
-    sql = `
-      SELECT 
-        Employee_ID,
-        User_Name,
-        User_Mail,
-        Designation,
-        Department,
-        Role,
-        Phone_Number,
-        Reporting_Person,
-        is_archived
-      FROM mis_user_data
-      ORDER BY Department, Employee_ID DESC
-    `;
-
+  if (role === "Director" || role === "HR Manager" || role === "Super Admin") {
+    if (department && department.trim() && department !== "all") {
+      sql = `
+        SELECT DISTINCT
+          u.Employee_ID,
+          u.User_Name,
+          u.User_Mail,
+          u.Designation,
+          u.Department,
+          u.Role,
+          u.Phone_Number,
+          u.Reporting_Person,
+          u.is_archived
+        FROM mis_user_data u
+        LEFT JOIN user_departments d
+          ON u.User_Mail = d.user_mail
+        WHERE
+          ${archiveCondition}
+          AND (
+            LOWER(TRIM(u.Department)) = LOWER(TRIM(?))
+            OR LOWER(TRIM(d.department)) = LOWER(TRIM(?))
+          )
+        ORDER BY u.Employee_ID DESC
+      `;
+      params = [department.trim(), department.trim()];
+    } else {
+      sql = `
+        SELECT 
+          Employee_ID,
+          User_Name,
+          User_Mail,
+          Designation,
+          Department,
+          Role,
+          Phone_Number,
+          Reporting_Person,
+          is_archived
+        FROM mis_user_data u
+        WHERE ${archiveCondition}
+        ORDER BY u.Department, u.Employee_ID DESC
+      `;
+    }
   }
 
   /* HR / ADMIN → ONLY THEIR DEPARTMENT */
-
-else if (role === "HR" || role === "Admin") {
-
-  sql = `
-    SELECT DISTINCT
-      u.Employee_ID,
-      u.User_Name,
-      u.User_Mail,
-      u.Designation,
-      u.Department,
-      u.Role,
-      u.Phone_Number,
-      u.Reporting_Person,
-      u.is_archived
-    FROM mis_user_data u
-    LEFT JOIN user_departments d
-      ON u.User_Mail = d.user_mail
-    WHERE
-      u.is_archived = 0
-      AND (
-        LOWER(TRIM(u.Department)) = LOWER(?)
-        OR LOWER(TRIM(d.department)) = LOWER(?)
-      )
-    ORDER BY u.Employee_ID DESC
-  `;
-
-  params = [department, department];
-
-}
-
-  else {
+  else if (role === "HR" || role === "Admin") {
+    sql = `
+      SELECT DISTINCT
+        u.Employee_ID,
+        u.User_Name,
+        u.User_Mail,
+        u.Designation,
+        u.Department,
+        u.Role,
+        u.Phone_Number,
+        u.Reporting_Person,
+        u.is_archived
+      FROM mis_user_data u
+      LEFT JOIN user_departments d
+        ON u.User_Mail = d.user_mail
+      WHERE
+        COALESCE(u.is_archived, 0) = 0
+        AND (
+          LOWER(TRIM(u.Department)) = LOWER(?)
+          OR LOWER(TRIM(d.department)) = LOWER(?)
+        )
+      ORDER BY u.Employee_ID DESC
+    `;
+    params = [department, department];
+  } else {
     return res.json([]);
   }
 
@@ -402,19 +423,17 @@ app.post("/addUser", upload.none(), (req, res) => {
     return res.json({ success: false, message: "DB not connected" });
   }
 
-  const {
-    New_Employee_ID,
-    New_Name,
-    New_User_Mail,
-    New_Designation,
-    New_Reporting_Person,
-    New_Role,
-    New_Number,
-    New_Password
-  } = req.body;
+  const New_Employee_ID = (req.body.New_Employee_ID || req.body.Employee_ID || req.body.employee_id || "").trim();
+  const New_Name = (req.body.New_Name || req.body.User_Name || req.body.name || "").trim();
+  const New_User_Mail = (req.body.New_User_Mail || req.body.User_Mail || req.body.email || "").trim();
+  const New_Role = (req.body.New_Role || req.body.Role || req.body.role || "Employee").trim();
+  const New_Password = (req.body.New_Password || req.body.Password || req.body.password || "").trim();
+  const New_Designation = (req.body.New_Designation || req.body.Designation || req.body.designation || "").trim();
+  const New_Reporting_Person = (req.body.New_Reporting_Person || req.body.Reporting_Person || req.body.reporting_person || "").trim();
+  const New_Number = (req.body.New_Number || req.body.Phone_Number || req.body.phone || "").trim();
 
   if (!New_Employee_ID || !New_Name || !New_User_Mail || !New_Role || !New_Password) {
-    return res.json({ success: false, message: "Missing fields" });
+    return res.json({ success: false, message: "Missing required fields (ID, Name, Email, Role, Password)" });
   }
 
   const rawDept = req.body.Department || req.body.department || "";
@@ -503,31 +522,34 @@ app.post("/deleteUser", (req, res) => {
    ARCHIVE USER (SOFT DELETE)
 ====================== */
 app.post("/archiveUser", (req, res) => {
-
-  console.log("===== ARCHIVE API HIT =====");
+  console.log("===== ARCHIVE USER API HIT =====");
   console.log("BODY:", req.body);
 
   if (!db) {
     return res.json({ success: false, message: "DB not connected" });
   }
 
-  const { Employee_ID } = req.body;
+  const Employee_ID = (req.body.Employee_ID || req.body.employee_id || "").toString().trim();
+  const User_Mail = (req.body.User_Mail || req.body.email || req.body.user_mail || "").toString().trim();
+  const is_archived = req.body.is_archived;
 
-  if (!Employee_ID) {
+  if (!Employee_ID && !User_Mail) {
     return res.json({
       success: false,
-      message: "Employee_ID missing"
+      message: "Employee_ID or User_Mail is required to archive/inactivate user"
     });
   }
 
+  const archiveVal = (is_archived !== undefined && (is_archived === 0 || is_archived === "0" || is_archived === false)) ? 0 : 1;
+
   const sql = `
     UPDATE mis_user_data
-    SET is_archived = 1
-    WHERE Employee_ID = ?
+    SET is_archived = ?
+    WHERE (Employee_ID IS NOT NULL AND Employee_ID != '' AND Employee_ID != '--' AND Employee_ID = ?)
+       OR (User_Mail IS NOT NULL AND LOWER(TRIM(User_Mail)) = LOWER(TRIM(?)))
   `;
 
-  db.query(sql, [Employee_ID], (err, result) => {
-
+  db.query(sql, [archiveVal, Employee_ID, User_Mail], (err, result) => {
     console.log("SQL ERROR:", err);
     console.log("RESULT:", result);
 
@@ -540,11 +562,11 @@ app.post("/archiveUser", (req, res) => {
 
     res.json({
       success: true,
-      affectedRows: result.affectedRows
+      affectedRows: result ? result.affectedRows : 0,
+      is_archived: archiveVal,
+      message: archiveVal === 1 ? "Member archived/inactivated successfully" : "Member restored successfully"
     });
-
   });
-
 });
 
 /* ======================
@@ -2733,7 +2755,7 @@ app.get("/getSuperAdminDashboardData", (req, res) => {
         ) t WHERE t.user_mail = u.User_Mail AND t.d >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
       ) as active_last_3days
     FROM mis_user_data u
-    WHERE u.is_archived = 0
+    WHERE COALESCE(u.is_archived, 0) = 0
       AND u.Role NOT LIKE '%HR%'
       AND u.Role NOT LIKE '%Admin%'
       AND u.Role NOT LIKE '%Team_Lead%'
