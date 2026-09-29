@@ -2862,6 +2862,103 @@ app.get("/getSuperAdminDashboardData", (req, res) => {
 
 });
 
+/* ======================
+   SUPER ADMIN TL TASKS (ALL DEPARTMENTS)
+====================== */
+app.get("/getSuperAdminTLTasks", (req, res) => {
+  if (!db) return res.json({ success: false, data: [] });
+
+  const { department, status, search } = req.query;
+
+  const sql = `
+    SELECT 
+      'Brand_Infringement' AS department,
+      id, user_name, user_mail, task_title, task_description, due_date, Estate_hours AS estimated_hours, priority, assigned_by, task_status, status_note, assigned_at
+    FROM assigned_tasks_brand_infringement
+
+    UNION ALL
+
+    SELECT 
+      'Media_Monitoring' AS department,
+      id, user_name, user_mail, task_title, task_description, due_date, estimated_hours AS estimated_hours, priority, assigned_by, task_status, status_note, assigned_at
+    FROM assigned_tasks_media_monitoring
+
+    UNION ALL
+
+    SELECT 
+      'Social_Media_N_Website_Audit' AS department,
+      id, user_name, user_mail, task_title, task_description, due_date, Estate_hours AS estimated_hours, priority, assigned_by, task_status, status_note, assigned_at
+    FROM assigned_tasks_social_media_n_website_audit
+
+    ORDER BY assigned_at DESC
+  `;
+
+  db.query(sql, (err, rows) => {
+    if (err) {
+      console.error("❌ getSuperAdminTLTasks error:", err.message);
+      return res.json({ success: false, data: [] });
+    }
+
+    let data = rows || [];
+    if (department && department !== "ALL") {
+      data = data.filter(r => r.department.toLowerCase() === department.toLowerCase());
+    }
+    if (status && status !== "ALL") {
+      data = data.filter(r => (r.task_status || "").toLowerCase() === status.toLowerCase());
+    }
+    if (search && search.trim() !== "") {
+      const q = search.toLowerCase();
+      data = data.filter(r => 
+        (r.task_title && r.task_title.toLowerCase().includes(q)) ||
+        (r.user_name && r.user_name.toLowerCase().includes(q)) ||
+        (r.user_mail && r.user_mail.toLowerCase().includes(q)) ||
+        (r.assigned_by && r.assigned_by.toLowerCase().includes(q))
+      );
+    }
+
+    res.json({ success: true, data });
+  });
+});
+
+/* ======================
+   UPDATE PASSWORD (FOR ALL ROLES / SUPER ADMIN)
+====================== */
+app.post("/updatePassword", upload.none(), (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const userMail = req.body.user_mail || req.body.email;
+  const oldPassword = req.body.old_password;
+  const newPassword = req.body.new_password;
+
+  if (!userMail || !newPassword) {
+    return res.json({ success: false, message: "User email and new password are required" });
+  }
+
+  if (oldPassword) {
+    db.query("SELECT Password FROM mis_user_data WHERE LOWER(User_Mail) = LOWER(?)", [userMail.trim()], (err, rows) => {
+      if (err || !rows.length) {
+        return res.json({ success: false, message: "User not found" });
+      }
+      if (rows[0].Password !== oldPassword) {
+        return res.json({ success: false, message: "Current password is incorrect" });
+      }
+      db.query("UPDATE mis_user_data SET Password = ? WHERE LOWER(User_Mail) = LOWER(?)", [newPassword, userMail.trim()], (updateErr) => {
+        if (updateErr) {
+          return res.json({ success: false, message: updateErr.message });
+        }
+        res.json({ success: true, message: "Password updated successfully" });
+      });
+    });
+  } else {
+    db.query("UPDATE mis_user_data SET Password = ? WHERE LOWER(User_Mail) = LOWER(?)", [newPassword, userMail.trim()], (updateErr) => {
+      if (updateErr) {
+        return res.json({ success: false, message: updateErr.message });
+      }
+      res.json({ success: true, message: "Password updated successfully" });
+    });
+  }
+});
+
 app.get("/getSummary", (req, res) => {
 
   if (!db) return res.json({ success:false });
