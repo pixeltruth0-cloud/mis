@@ -2677,189 +2677,155 @@ app.get("/getMyTasks", (req, res) => {
    SUPER ADMIN DASHBOARD (ALL DEPARTMENTS – MULTI TABLE)
 ====================== */
 app.get("/getSuperAdminDashboardData", (req, res) => {
-
   if (!db) return res.json({ success:false });
 
   // Get date in IST (UTC+5:30)
   const istDate = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
   const today = istDate.toISOString().split("T")[0];
 
-  /* ===============================
-     STEP 1 – GET ALL ACTIVE USERS
-  =============================== */
-
-  const usersQuery = `
-    SELECT User_Mail, Department, User_Name
-    FROM mis_user_data
-    WHERE is_archived = 0
-      AND Role NOT LIKE '%HR%'
-      AND Role NOT LIKE '%Admin%'
-      AND Role NOT LIKE '%Team_Lead%'
-      AND Role NOT LIKE '%Director%'
-      AND Role NOT LIKE '%HR Manager%'
+  const query = `
+    SELECT 
+      u.Employee_ID,
+      u.User_Name,
+      u.User_Mail,
+      u.Department,
+      u.Role,
+      u.Designation,
+      u.Phone_Number,
+      u.Reporting_Person,
+      (
+        SELECT MAX(sub_date) FROM (
+          SELECT DATE(date) as sub_date FROM social_media_n_website_audit_data WHERE user_mail = u.User_Mail
+          UNION ALL
+          SELECT DATE(date) as sub_date FROM media_monitoring_data WHERE user_mail = u.User_Mail
+          UNION ALL
+          SELECT DATE(date) as sub_date FROM brand_infringement WHERE user_mail = u.User_Mail
+          UNION ALL
+          SELECT DATE(date) as sub_date FROM brand_affiliate WHERE user_mail = u.User_Mail
+          UNION ALL
+          SELECT DATE(date) as sub_date FROM anti_money_laundering_data WHERE user_mail = u.User_Mail
+        ) sub
+      ) as last_submission,
+      EXISTS (
+        SELECT 1 FROM (
+          SELECT user_mail, DATE(date) as d FROM social_media_n_website_audit_data
+          UNION ALL
+          SELECT user_mail, DATE(date) as d FROM media_monitoring_data
+          UNION ALL
+          SELECT user_mail, DATE(date) as d FROM brand_infringement
+          UNION ALL
+          SELECT user_mail, DATE(date) as d FROM brand_affiliate
+          UNION ALL
+          SELECT user_mail, DATE(date) as d FROM anti_money_laundering_data
+        ) t WHERE t.user_mail = u.User_Mail AND t.d = ?
+      ) as submitted_today,
+      EXISTS (
+        SELECT 1 FROM (
+          SELECT user_mail, DATE(date) as d FROM social_media_n_website_audit_data
+          UNION ALL
+          SELECT user_mail, DATE(date) as d FROM media_monitoring_data
+          UNION ALL
+          SELECT user_mail, DATE(date) as d FROM brand_infringement
+          UNION ALL
+          SELECT user_mail, DATE(date) as d FROM brand_affiliate
+          UNION ALL
+          SELECT user_mail, DATE(date) as d FROM anti_money_laundering_data
+        ) t WHERE t.user_mail = u.User_Mail AND t.d >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
+      ) as active_last_3days
+    FROM mis_user_data u
+    WHERE u.is_archived = 0
+      AND u.Role NOT LIKE '%HR%'
+      AND u.Role NOT LIKE '%Admin%'
+      AND u.Role NOT LIKE '%Team_Lead%'
+      AND u.Role NOT LIKE '%Director%'
+      AND u.Role NOT LIKE '%HR Manager%'
+    ORDER BY u.Department, u.User_Name
   `;
 
-  db.query(usersQuery, (err, users) => {
-
+  db.query(query, [today], (err, rows) => {
     if (err) {
-      console.error("❌ Users Query Error:", err.message);
-      return res.json({ success:false });
+      console.error("❌ getSuperAdminDashboardData error:", err.message);
+      return res.json({ success: false, message: err.message });
     }
 
-    if (!users.length) {
-      return res.json({ success:true, summary:{}, departments:[], missingUsers:[] });
-    }
+    let departmentMap = {};
+    const submittedEmployees = [];
+    const missingEmployees = [];
+    const inactiveEmployees = [];
 
-    /* ===============================
-       STEP 2 – GET TODAY SUBMISSIONS
-       FROM ALL TABLES USING UNION
-    =============================== */
+    rows.forEach(u => {
+      const rawDept = (u.Department || "Other").trim();
+      const canonicalDept = rawDept.toLowerCase() === "media_monitoring" ? "Media_Monitoring" : rawDept;
 
-    const submissionQuery = `
-      SELECT DISTINCT user_mail FROM social_media_n_website_audit_data
-      WHERE DATE(date) = ?
+      if (!departmentMap[canonicalDept]) {
+        departmentMap[canonicalDept] = {
+          department: canonicalDept,
+          totalEmployees: 0,
+          submittedToday: 0
+        };
+      }
+      departmentMap[canonicalDept].totalEmployees++;
 
-      UNION
+      const isSubmitted = u.submitted_today === 1;
+      const isInactive = u.active_last_3days === 0;
 
-      SELECT DISTINCT user_mail FROM media_monitoring_data
-      WHERE DATE(date) = ?
+      const userObj = {
+        name: u.User_Name || (u.User_Mail ? u.User_Mail.split('@')[0] : "Employee"),
+        email: u.User_Mail,
+        department: canonicalDept,
+        employee_id: u.Employee_ID || "--",
+        designation: u.Designation || "--",
+        role: u.Role || "Employee",
+        phone: u.Phone_Number || "--",
+        reporting_person: u.Reporting_Person || "--",
+        last_submission: u.last_submission ? u.last_submission.toISOString().split("T")[0] : "Never",
+        is_submitted: isSubmitted,
+        is_inactive: isInactive
+      };
 
-      UNION
-
-      SELECT DISTINCT user_mail FROM brand_infringement
-      WHERE DATE(date) = ?
-
-      UNION
-
-      SELECT DISTINCT user_mail FROM brand_affiliate WHERE DATE(date)=?
-
-      UNION
-
-      SELECT DISTINCT user_mail FROM anti_money_laundering_data
-      WHERE DATE(date) = ?
-    `;
-
-    db.query(
-      submissionQuery,
-      [today, today, today, today, today],
-      (err, submissions) => {
-
-      if (err) {
-        console.error("❌ Submission Query Error:", err.message);
-        return res.json({ success:false });
+      if (isSubmitted) {
+        departmentMap[canonicalDept].submittedToday++;
+        submittedEmployees.push(userObj);
+      } else {
+        missingEmployees.push(userObj);
       }
 
-      /* ===============================
-         STEP 3 – GET INACTIVE (3 DAYS)
-      =============================== */
-      const inactiveQuery = `
-        SELECT COUNT(*) AS inactiveUsers
-        FROM mis_user_data u
-        WHERE u.is_archived = 0
-          AND u.Role NOT IN ('HR','Admin','Team_Lead','Director','HR Manager')
-          AND NOT EXISTS (
-            SELECT 1 FROM social_media_n_website_audit_data s
-              WHERE s.user_mail = u.User_Mail
-              AND DATE(s.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
-
-            UNION
-
-            SELECT 1 FROM media_monitoring_data m
-              WHERE m.user_mail = u.User_Mail
-              AND DATE(m.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
-
-            UNION
-
-            SELECT 1 FROM brand_infringement b
-              WHERE b.user_mail = u.User_Mail
-              AND DATE(b.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
-
-            UNION
-
-            SELECT 1 FROM brand_affiliate ba
-              WHERE ba.user_mail = u.User_Mail
-              AND DATE(ba.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
-
-            UNION
-
-            SELECT 1 FROM anti_money_laundering_data a
-              WHERE a.user_mail = u.User_Mail
-              AND DATE(a.date) >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
-          )
-      `;
-
-      db.query(inactiveQuery, (err, inactiveRows) => {
-
-        if (err) {
-          console.error("❌ Inactive Query Error:", err.message);
-          return res.json({ success:false });
-        }
-
-        /* ===============================
-           STEP 4 – PROCESS DATA
-        =============================== */
-
-        const submittedSet = new Set(
-          submissions.map(s => (s.user_mail || "").toLowerCase().trim())
-        );
-
-        let departmentMap = {};
-        const missingUsers = [];
-
-        users.forEach(u => {
-          const rawDept = (u.Department || "Other").trim();
-          const canonicalDept = rawDept.toLowerCase() === "media_monitoring" ? "Media_Monitoring" : rawDept;
-
-          if (!departmentMap[canonicalDept]) {
-            departmentMap[canonicalDept] = {
-              department: canonicalDept,
-              totalEmployees: 0,
-              submittedToday: 0
-            };
-          }
-
-          departmentMap[canonicalDept].totalEmployees++;
-
-          const mail = (u.User_Mail || "").toLowerCase().trim();
-          if (submittedSet.has(mail)) {
-            departmentMap[canonicalDept].submittedToday++;
-          } else {
-            missingUsers.push({
-              name: u.User_Name || (u.User_Mail ? u.User_Mail.split("@")[0] : "Employee"),
-              email: u.User_Mail,
-              department: canonicalDept
-            });
-          }
-
-        });
-
-        const departments = Object.values(departmentMap).map(d => ({
-          ...d,
-          missing: d.totalEmployees - d.submittedToday
-        }));
-
-        const totalDepartments = departments.length;
-        const totalEmployees = users.length;
-        const totalSubmittedToday = submissions.length;
-
-        res.json({
-          success:true,
-          summary:{
-            totalDepartments,
-            totalEmployees,
-            totalSubmittedToday,
-            inactiveUsers: inactiveRows[0] ? inactiveRows[0].inactiveUsers : 0
-          },
-          departments,
-          missingUsers
-        });
-
-      });
-
+      if (isInactive) {
+        inactiveEmployees.push(userObj);
+      }
     });
 
-  });
+    const departments = Object.values(departmentMap).map(d => ({
+      ...d,
+      missing: d.totalEmployees - d.submittedToday
+    }));
 
+    res.json({
+      success: true,
+      summary: {
+        totalDepartments: departments.length,
+        totalEmployees: rows.length,
+        totalSubmittedToday: submittedEmployees.length,
+        missingToday: missingEmployees.length,
+        inactiveUsers: inactiveEmployees.length,
+        activeMissingToday: missingEmployees.filter(m => !m.is_inactive).length
+      },
+      departments,
+      submittedEmployees,
+      missingEmployees,
+      inactiveEmployees,
+      allEmployees: rows.map(r => ({
+        employee_id: r.Employee_ID || "--",
+        name: r.User_Name || (r.User_Mail ? r.User_Mail.split('@')[0] : "Employee"),
+        email: r.User_Mail,
+        department: (r.Department || "").trim().toLowerCase() === "media_monitoring" ? "Media_Monitoring" : (r.Department || "").trim(),
+        designation: r.Designation || "--",
+        role: r.Role || "Employee",
+        submitted: r.submitted_today === 1,
+        last_submission: r.last_submission ? r.last_submission.toISOString().split("T")[0] : "Never"
+      }))
+    });
+  });
 });
 
 /* ======================
