@@ -3095,11 +3095,11 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
 
   if (!db) return res.json([]);
 
-  const { employee, from_date, to_date } = req.query;
+  const { employee, department, from_date, to_date } = req.query;
 
   let sql = `
     SELECT
-      work_date,
+      DATE(work_date) as work_date,
       user_name,
       department,
       SUM(actual_hours) AS hours
@@ -3110,20 +3110,32 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
   let params = [];
 
   /* employee filter */
-  if (employee) {
+  if (employee && employee.trim()) {
     sql += " AND user_name LIKE ?";
-    params.push(`%${employee}%`);
+    params.push(`%${employee.trim()}%`);
+  }
+
+  /* department filter */
+  if (department && department.trim() && department !== "ALL") {
+    sql += " AND (LOWER(department) = LOWER(?) OR LOWER(REPLACE(department, '_', ' ')) = LOWER(?))";
+    params.push(department.trim(), department.trim().replace(/_/g, " "));
   }
 
   /* date filter */
   if (from_date && to_date) {
     sql += " AND work_date BETWEEN ? AND ?";
     params.push(from_date, to_date);
+  } else if (from_date) {
+    sql += " AND work_date >= ?";
+    params.push(from_date);
+  } else if (to_date) {
+    sql += " AND work_date <= ?";
+    params.push(to_date);
   }
 
   sql += `
-    GROUP BY work_date, user_name, department
-    ORDER BY work_date DESC
+    GROUP BY DATE(work_date), user_name, department
+    ORDER BY work_date DESC, user_name ASC
   `;
 
   db.query(sql, params, (err, rows) => {
@@ -3133,7 +3145,46 @@ app.get("/getEmployeeWorkSummary", (req, res) => {
       return res.json([]);
     }
 
-    res.json(rows);
+    // Process and logically normalize rows
+    const formatted = rows.map(r => {
+      const rawDept = (r.department || "Other").trim();
+      const isAML = rawDept.toLowerCase().includes("anti_money") || rawDept.toLowerCase().includes("aml");
+      const numHours = Number(r.hours || 0);
+
+      let effectiveHours = numHours;
+      let casesCount = 0;
+
+      // In all_tasks_view, AML case counts were selected as actual_hours (e.g. 195 cases).
+      // Each daily AML submission represents a full 8-hour shift.
+      if (isAML) {
+        casesCount = numHours;
+        effectiveHours = 8;
+      } else if (effectiveHours > 16) {
+        casesCount = effectiveHours;
+        effectiveHours = 8;
+      }
+
+      let dateStr = "";
+      if (r.work_date) {
+        try {
+          dateStr = typeof r.work_date === "string" ? r.work_date.split("T")[0] : new Date(r.work_date).toISOString().split("T")[0];
+        } catch(e) {
+          dateStr = String(r.work_date);
+        }
+      }
+
+      return {
+        work_date: dateStr,
+        user_name: r.user_name || "Employee",
+        department: rawDept,
+        hours: effectiveHours,
+        raw_hours: numHours,
+        cases: casesCount > 0 ? casesCount : null,
+        is_aml: isAML
+      };
+    });
+
+    res.json(formatted);
 
   });
 
