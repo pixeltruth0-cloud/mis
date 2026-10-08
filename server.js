@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express"); 
 const session = require("express-session");
 const mysql = require("mysql2");
@@ -122,11 +123,23 @@ if (!process.env.DATABASE_URL) {
       CREATE TABLE IF NOT EXISTS \`mis_cron_status\` (
         \`id\` int NOT NULL AUTO_INCREMENT,
         \`last_run_date\` varchar(50) NOT NULL,
+        \`run_type\` varchar(50) DEFAULT 'night',
         PRIMARY KEY (\`id\`)
       )
     `, (err) => {
-      if (err) console.error("❌ Error migrating mis_cron_status table:", err);
-      else console.log("✅ DB schema verification complete for mis_cron_status.");
+      if (err) {
+        console.error("❌ Error migrating mis_cron_status table:", err);
+      } else {
+        db.query("SHOW COLUMNS FROM mis_cron_status LIKE 'run_type'", (err2, cols) => {
+          if (!err2 && (!cols || cols.length === 0)) {
+            db.query("ALTER TABLE mis_cron_status ADD COLUMN run_type VARCHAR(50) DEFAULT 'night'", (alterErr) => {
+              if (alterErr) console.error("❌ Error adding run_type column to mis_cron_status:", alterErr);
+              else console.log("✅ Successfully added run_type column to mis_cron_status.");
+            });
+          }
+        });
+        console.log("✅ DB schema verification complete for mis_cron_status.");
+      }
     });
   };
   migrateCronTable();
@@ -1576,6 +1589,137 @@ if (
 });
 
 /* ======================
+   EMAIL UTILITIES & DISPATCHER
+====================== */
+
+// Clean and format recipient emails: strips 'admin_', removes test emails (.admin / director)
+const cleanEmailRecipients = (emails) => {
+    const cleaned = [];
+    (emails || []).forEach(email => {
+        if (!email) return;
+        let cleanedEmail = email.trim().toLowerCase();
+
+        // 1. If email starts with 'admin_', strip it
+        if (cleanedEmail.startsWith("admin_")) {
+            cleanedEmail = cleanedEmail.substring(6);
+        }
+
+        // 2. Ignore test IDs (contains '.admin' or contains 'director@')
+        if (cleanedEmail.includes(".admin") || cleanedEmail.includes("director@")) {
+            return;
+        }
+
+        // 3. Simple validation & uniqueness
+        if (cleanedEmail.includes("@") && cleanedEmail.includes(".") && !cleaned.includes(cleanedEmail)) {
+            cleaned.push(cleanedEmail);
+        }
+    });
+    return cleaned;
+};
+
+// Unified Email Dispatcher: Primary = Brevo HTTP API, Fallback = Nodemailer SMTP
+const dispatchUnifiedEmail = async ({ sender, to, cc, subject, htmlContent }) => {
+    const toList = (Array.isArray(to) ? to : [to])
+        .map(e => typeof e === 'string' ? e.trim() : (e.email || ''))
+        .filter(Boolean);
+    const ccList = cc 
+        ? (Array.isArray(cc) ? cc : [cc]).map(e => typeof e === 'string' ? e.trim() : (e.email || '')).filter(Boolean)
+        : [];
+
+    if (toList.length === 0) {
+        console.warn("⚠️ [Email Dispatch] No recipients provided.");
+        return { success: false, reason: "No recipients provided" };
+    }
+
+    const senderName = (sender && sender.name) || process.env.BREVO_SENDER_NAME || "Pixeltruth Scheduler";
+    const senderEmail = (sender && sender.email) || process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER || "operations@pixeltruth.com";
+
+    let brevoError = null;
+
+    // 1. Try Brevo HTTP API if API key is provided
+    if (process.env.BREVO_API_KEY && process.env.BREVO_API_KEY.trim().length > 0) {
+        try {
+            const brevoPayload = {
+                sender: { name: senderName, email: senderEmail },
+                to: toList.map(email => ({ email })),
+                subject,
+                htmlContent
+            };
+            if (ccList.length > 0) {
+                brevoPayload.cc = ccList.map(email => ({ email }));
+            }
+
+            const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+                method: "POST",
+                headers: {
+                    "accept": "application/json",
+                    "api-key": process.env.BREVO_API_KEY.trim(),
+                    "content-type": "application/json"
+                },
+                body: JSON.stringify(brevoPayload)
+            });
+
+            const responseText = await response.text();
+            if (!response.ok) {
+                throw new Error(`Brevo HTTP ${response.status}: ${responseText}`);
+            }
+
+            let data = {};
+            try { data = JSON.parse(responseText); } catch (_) {}
+            console.log(`✅ [Brevo API] Sent "${subject}" to [${toList.join(", ")}]`);
+            return { success: true, provider: "brevo", data, recipients: toList };
+        } catch (err) {
+            brevoError = err.message;
+            console.error(`⚠️ [Brevo Failed]: ${brevoError}. Attempting SMTP fallback...`);
+        }
+    } else {
+        brevoError = "BREVO_API_KEY is not defined in environment variables";
+    }
+
+    // 2. Nodemailer SMTP Fallback
+    try {
+        const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+        const smtpPort = parseInt(process.env.SMTP_PORT) || 587;
+        const smtpUser = process.env.SMTP_USER || "operations@pixeltruth.com";
+        const smtpPass = process.env.SMTP_PASS;
+
+        if (!smtpPass || smtpPass === "pixeltruth_pass") {
+            throw new Error(`SMTP_PASS not configured in environment variables (or placeholder detected).`);
+        }
+
+        const transporter = nodemailer.createTransport({
+            host: smtpHost,
+            port: smtpPort,
+            secure: smtpPort === 465,
+            auth: {
+                user: smtpUser,
+                pass: smtpPass
+            }
+        });
+
+        const mailOptions = {
+            from: `"${senderName}" <${smtpUser}>`,
+            to: toList.join(", "),
+            subject,
+            html: htmlContent
+        };
+        if (ccList.length > 0) {
+            mailOptions.cc = ccList.join(", ");
+        }
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`✅ [Nodemailer SMTP] Sent "${subject}" to [${toList.join(", ")}] (MessageID: ${info.messageId})`);
+        return { success: true, provider: "smtp", messageId: info.messageId, recipients: toList };
+    } catch (smtpErr) {
+        console.error(`❌ [SMTP Fallback Failed]: ${smtpErr.message}`);
+        const err = new Error(`Email dispatch failed on all channels. Brevo: [${brevoError}] | SMTP: [${smtpErr.message}]`);
+        err.brevoError = brevoError;
+        err.smtpError = smtpErr.message;
+        throw err;
+    }
+};
+
+/* ======================
    CRON JOB: CHECK DATA FILING DUES & SUMMARIES
 ====================== */
 const executeDuesCheckLogic = (runType = "night", res = null) => {
@@ -1596,36 +1740,43 @@ const executeDuesCheckLogic = (runType = "night", res = null) => {
     db.query(empSql, (err, employees) => {
         if (err) {
             console.error("Error fetching employees for dues check:", err);
-            if (res) return res.status(500).json({ error: "Database error" });
+            if (res) return res.status(500).json({ error: "Database error: " + err.message });
             return;
         }
 
-        const todayStr = new Date().toISOString().split('T')[0];
-        const todayDate = new Date(todayStr);
+        // IST date
+        const todayStrIST = new Intl.DateTimeFormat("en-US", {
+            timeZone: "Asia/Kolkata",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit"
+        }).format(new Date());
+        const [m, d, y] = todayStrIST.split('/');
+        const todayStr = `${y}-${m}-${d}`;
+        const todayDate = new Date(`${todayStr}T00:00:00`);
 
         const promises = employees.map(emp => {
             return new Promise((resolve) => {
-                const dept = (emp.Department || "").trim().toLowerCase();
+                const rawDept = (emp.Department || "").trim().toLowerCase();
+                const dept = rawDept.replace(/\s+/g, '_');
                 let table = "";
                 if (dept === "brand_infringement") table = "brand_infringement";
                 else if (dept === "media_monitoring") table = "media_monitoring_data";
-                else if (dept === "social_media_n_website_audit") table = "social_media_n_website_audit_data";
+                else if (dept === "social_media_n_website_audit" || dept === "social_media_and_website_audit") table = "social_media_n_website_audit_data";
                 else if (dept === "anti_money_laundering") table = "anti_money_laundering_data";
 
                 if (!table) {
-                    // No table associated with this department, skip dues checking for them
                     return resolve({ ...emp, diffDays: 0, lastDate: null, hasTable: false });
                 }
 
                 const sql = `SELECT MAX(date) AS last_date FROM \`${table}\` WHERE user_mail = ?`;
-                db.query(sql, [emp.User_Mail], (err, rows) => {
-                    if (err || rows.length === 0 || !rows[0].last_date) {
-                        // Never filled, default to 5 days ago
+                db.query(sql, [emp.User_Mail], (qErr, rows) => {
+                    if (qErr || !rows || rows.length === 0 || !rows[0].last_date) {
                         return resolve({ ...emp, diffDays: 5, lastDate: null, hasTable: true });
                     }
                     const lastDateVal = new Date(rows[0].last_date);
                     const diffTime = todayDate.getTime() - lastDateVal.getTime();
-                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                    const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
                     resolve({ ...emp, diffDays, lastDate: rows[0].last_date, hasTable: true });
                 });
             });
@@ -1655,7 +1806,6 @@ const executeDuesCheckLogic = (runType = "night", res = null) => {
             // Process each department
             const deptPromises = depts.map(dept => {
                 return new Promise((resolveDept) => {
-                    // Fetch Team Leads, Project Leads, Directors of this department
                     const leadsSql = `
                         SELECT User_Mail, Designation, Role 
                         FROM mis_user_data 
@@ -1669,9 +1819,9 @@ const executeDuesCheckLogic = (runType = "night", res = null) => {
                             OR Role = 'Director'
                           )
                     `;
-                    db.query(leadsSql, [dept], (err, managers) => {
-                        if (err) {
-                            console.error(`Error fetching managers for dept ${dept}:`, err);
+                    db.query(leadsSql, [dept], (mErr, managers) => {
+                        if (mErr) {
+                            console.error(`Error fetching managers for dept ${dept}:`, mErr);
                             return resolveDept();
                         }
 
@@ -1680,12 +1830,11 @@ const executeDuesCheckLogic = (runType = "night", res = null) => {
                         const due1 = deptResults.filter(r => r.diffDays === 1 || r.diffDays === 2);
                         const due3 = deptResults.filter(r => r.diffDays >= 3);
 
-                        // If no one is due and no one filled, skip
                         if (deptResults.length === 0) return resolveDept();
 
-                        // 1. NIGHT RUN: Send summary email to managers
+                        // 1. NIGHT RUN: Send department summary email to managers
                         const sendDeptEmailPromise = new Promise((resolveSend) => {
-                            if (runType === "night" && managers.length > 0) {
+                            if (runType === "night" && managers && managers.length > 0) {
                                 const managerEmails = cleanEmailRecipients(managers.map(m => m.User_Mail));
                                 if (managerEmails.length > 0) {
                                     const formattedDate = todayDate.toLocaleDateString("en-US", {
@@ -1727,25 +1876,16 @@ const executeDuesCheckLogic = (runType = "night", res = null) => {
                                         </div>
                                     `;
 
-                                    fetch("https://api.brevo.com/v3/smtp/email", {
-                                        method: "POST",
-                                        headers: {
-                                            "accept": "application/json",
-                                            "api-key": process.env.BREVO_API_KEY || "",
-                                            "content-type": "application/json"
-                                        },
-                                        body: JSON.stringify({
-                                            sender: { name: "Pixeltruth Scheduler", email: "pixeltruth.notify@gmail.com" },
-                                            to: managerEmails.map(email => ({ email })),
-                                            cc: [{ email: "jigyasha.pathak@pixeltruth.com", name: "Jigyasha Pathak" }],
-                                            subject: `📊 Filing Summary [${dept}]: ${formattedDate}`,
-                                            htmlContent: deptHtml
-                                        })
+                                    dispatchUnifiedEmail({
+                                        to: managerEmails,
+                                        cc: ["jigyasha.pathak@pixeltruth.com"],
+                                        subject: `📊 Filing Summary [${dept}]: ${formattedDate}`,
+                                        htmlContent: deptHtml
                                     }).then(() => {
                                         console.log(`✅ Sent department summary for ${dept} to leads.`);
                                         resolveSend();
-                                    }).catch(err => {
-                                        console.error(`❌ Failed to send department summary for ${dept}:`, err);
+                                    }).catch(sendErr => {
+                                        console.error(`❌ Failed to send department summary for ${dept}:`, sendErr.message);
                                         resolveSend();
                                     });
                                 } else {
@@ -1763,8 +1903,7 @@ const executeDuesCheckLogic = (runType = "night", res = null) => {
                                     return resolveWarning();
                                 }
 
-                                // Fetch project leads for the department
-                                const pLeads = managers.filter(m => m.Designation === 'Project Lead').map(m => m.User_Mail);
+                                const pLeads = (managers || []).filter(m => m.Designation === 'Project Lead').map(m => m.User_Mail);
                                 const rawRecipients = [dueEmp.User_Mail, ...pLeads];
                                 const recipients = cleanEmailRecipients(rawRecipients);
 
@@ -1792,25 +1931,16 @@ const executeDuesCheckLogic = (runType = "night", res = null) => {
                                     </div>
                                 `;
 
-                                fetch("https://api.brevo.com/v3/smtp/email", {
-                                    method: "POST",
-                                    headers: {
-                                        "accept": "application/json",
-                                        "api-key": process.env.BREVO_API_KEY || "",
-                                        "content-type": "application/json"
-                                    },
-                                    body: JSON.stringify({
-                                        sender: { name: "Pixeltruth Scheduler", email: "pixeltruth.notify@gmail.com" },
-                                        to: recipients.map(email => ({ email })),
-                                        cc: [{ email: "jigyasha.pathak@pixeltruth.com", name: "Jigyasha Pathak" }],
-                                        subject: `⚠️ Reminder: Daily Work Log Due - ${dueEmp.User_Name}`,
-                                        htmlContent: warnHtml
-                                    })
+                                dispatchUnifiedEmail({
+                                    to: recipients,
+                                    cc: ["jigyasha.pathak@pixeltruth.com"],
+                                    subject: `⚠️ Reminder: Daily Work Log Due - ${dueEmp.User_Name}`,
+                                    htmlContent: warnHtml
                                 }).then(() => {
                                     console.log(`✅ Sent individual warning to employee: ${dueEmp.User_Mail} and Project Leads.`);
                                     resolveWarning();
-                                }).catch(err => {
-                                    console.error(`❌ Failed to send individual due warning to ${recipients}:`, err);
+                                }).catch(wErr => {
+                                    console.error(`❌ Failed to send individual due warning to ${recipients}:`, wErr.message);
                                     resolveWarning();
                                 });
                             });
@@ -1826,113 +1956,141 @@ const executeDuesCheckLogic = (runType = "night", res = null) => {
             Promise.all(deptPromises).then(() => {
                 // 3. NIGHT RUN: Send global daily summary report to Directors and global Admins
                 if (runType !== "night") {
-                    if (res) return res.json({ success: true, message: `${runType} notifications sent successfully.` });
+                    // Log successful morning/evening run in mis_cron_status
+                    db.query("INSERT INTO mis_cron_status (last_run_date, run_type) VALUES (?, ?)", [todayStr, runType], () => {});
+                    if (res) return res.json({ success: true, message: `${runType} notifications processed successfully.` });
                     return;
                 }
 
-                const globalSql = `SELECT User_Mail FROM mis_user_data WHERE is_archived = 0 AND (Role = 'Director' OR Role = 'Admin')`;
-                db.query(globalSql, (err, directors) => {
-                    if (err || directors.length === 0) {
-                        if (res) return res.json({ success: true, message: "Summary sent to leads and individuals." });
+                const globalSql = `SELECT User_Mail, Role, Designation FROM mis_user_data WHERE is_archived = 0 AND (Role = 'Director' OR Role = 'Admin')`;
+                db.query(globalSql, async (dErr, directors) => {
+                    if (dErr || !directors || directors.length === 0) {
+                        console.error("❌ Error fetching directors:", dErr);
+                        if (res) return res.status(500).json({ success: false, message: "No directors found in database." });
                         return;
                     }
 
                     const directorEmails = cleanEmailRecipients(directors.map(d => d.User_Mail));
-                    if (directorEmails.length > 0) {
-                        const formattedDate = todayDate.toLocaleDateString("en-US", {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                        });
+                    if (directorEmails.length === 0) {
+                        console.warn("⚠️ No valid director emails found after filtering.");
+                        if (res) return res.status(400).json({ success: false, message: "No valid director emails found." });
+                        return;
+                    }
 
-                        const totalEmployees = results.filter(r => r.hasTable).length;
-                        const filledToday = filledTodayList.length;
-                        const pending1 = oneDayDueList.length;
-                        const pending3 = threeDayDueList.length;
+                    const formattedDate = todayDate.toLocaleDateString("en-US", {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    });
 
-                        const globalHtml = `
-                            <div style="font-family: 'Inter', system-ui, -apple-system, sans-serif; max-width: 650px; margin: 0 auto; padding: 30px; background-color: #f8fafc; border-radius: 16px; border: 1px solid #e2e8f0;">
-                                <div style="text-align: center; margin-bottom: 25px;">
-                                    <span style="background-color: #e0f2fe; color: #0369a1; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 100px; text-transform: uppercase;">Executive Report</span>
-                                    <h2 style="color: #0f172a; margin: 10px 0 0 0; font-size: 22px; font-weight: 700;">Global Daily Filing Summary</h2>
-                                    <p style="color: #64748b; font-size: 14px; margin-top: 6px;">Status of all departments on ${formattedDate}</p>
+                    const totalEmployees = results.filter(r => r.hasTable).length;
+                    const filledToday = filledTodayList.length;
+                    const pending1 = oneDayDueList.length;
+                    const pending3 = threeDayDueList.length;
+
+                    const globalHtml = `
+                        <div style="font-family: 'Inter', system-ui, -apple-system, sans-serif; max-width: 650px; margin: 0 auto; padding: 30px; background-color: #f8fafc; border-radius: 16px; border: 1px solid #e2e8f0;">
+                            <div style="text-align: center; margin-bottom: 25px;">
+                                <span style="background-color: #e0f2fe; color: #0369a1; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 100px; text-transform: uppercase;">Executive Report</span>
+                                <h2 style="color: #0f172a; margin: 10px 0 0 0; font-size: 22px; font-weight: 700;">Global Daily Filing Summary</h2>
+                                <p style="color: #64748b; font-size: 14px; margin-top: 6px;">Status of all departments on ${formattedDate}</p>
+                            </div>
+                            
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 25px;">
+                                <div style="background: #ffffff; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; text-align: center;">
+                                    <div style="font-size: 22px; font-weight: 700; color: #0f172a;">${totalEmployees}</div>
+                                    <div style="font-size: 11px; color: #64748b; margin-top: 4px; font-weight: 500;">Total Staff</div>
                                 </div>
-                                
-                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 25px; content-visibility: auto;">
-                                    <div style="background: #ffffff; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; text-align: center;">
-                                        <div style="font-size: 22px; font-weight: 700; color: #0f172a;">${totalEmployees}</div>
-                                        <div style="font-size: 11px; color: #64748b; margin-top: 4px; font-weight: 500;">Total Staff</div>
-                                    </div>
-                                    <div style="background: #ecfdf5; padding: 15px; border-radius: 10px; border: 1px solid #a7f3d0; text-align: center;">
-                                        <div style="font-size: 22px; font-weight: 700; color: #047857;">${filledToday}</div>
-                                        <div style="font-size: 11px; color: #065f46; margin-top: 4px; font-weight: 500;">Filled Today</div>
-                                    </div>
-                                    <div style="background: #fff7ed; padding: 15px; border-radius: 10px; border: 1px solid #fed7aa; text-align: center;">
-                                        <div style="font-size: 22px; font-weight: 700; color: #c2410c;">${pending1}</div>
-                                        <div style="font-size: 11px; color: #9a3412; margin-top: 4px; font-weight: 500;">1-2 Days Due</div>
-                                    </div>
-                                    <div style="background: #fef2f2; padding: 15px; border-radius: 10px; border: 1px solid #fecaca; text-align: center;">
-                                        <div style="font-size: 22px; font-weight: 700; color: #dc2626;">${pending3}</div>
-                                        <div style="font-size: 11px; color: #991b1b; margin-top: 4px; font-weight: 500;">3+ Days Due</div>
-                                    </div>
+                                <div style="background: #ecfdf5; padding: 15px; border-radius: 10px; border: 1px solid #a7f3d0; text-align: center;">
+                                    <div style="font-size: 22px; font-weight: 700; color: #047857;">${filledToday}</div>
+                                    <div style="font-size: 11px; color: #065f46; margin-top: 4px; font-weight: 500;">Filled Today</div>
                                 </div>
-                                
-                                <div style="background-color: #ffffff; border-radius: 12px; padding: 25px; border: 1px solid #e2e8f0;">
-                                    <h3 style="margin-top: 0; color: #1e293b; font-size: 15px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; font-weight: 600;">Department Breakdown</h3>
-                                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                                        <thead>
-                                            <tr style="border-bottom: 2px solid #e2e8f0; color: #475569; font-weight: 600;">
-                                                <th style="padding: 8px 0; text-align: left;">Department</th>
-                                                <th style="padding: 8px 0; text-align: center;">Filled Today</th>
-                                                <th style="padding: 8px 0; text-align: center;">1-2 Days Due</th>
-                                                <th style="padding: 8px 0; text-align: center;">3+ Days Due</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            ${depts.map(d => {
-                                                const dResults = results.filter(r => r.Department === d && r.hasTable);
-                                                const f = dResults.filter(r => r.diffDays === 0).length;
-                                                const d1 = dResults.filter(r => r.diffDays === 1 || r.diffDays === 2).length;
-                                                const d3 = dResults.filter(r => r.diffDays >= 3).length;
-                                                return `
-                                                    <tr style="border-bottom: 1px solid #f1f5f9;">
-                                                        <td style="padding: 10px 0; font-weight: 600; color: #0f172a;">${d}</td>
-                                                        <td style="padding: 10px 0; text-align: center; color: #16a34a; font-weight: 600;">${f}</td>
-                                                        <td style="padding: 10px 0; text-align: center; color: #ea580c; font-weight: 600;">${d1}</td>
-                                                        <td style="padding: 10px 0; text-align: center; color: #dc2626; font-weight: 600;">${d3}</td>
-                                                    </tr>
-                                                `;
-                                            }).join("")}
-                                        </tbody>
-                                    </table>
+                                <div style="background: #fff7ed; padding: 15px; border-radius: 10px; border: 1px solid #fed7aa; text-align: center;">
+                                    <div style="font-size: 22px; font-weight: 700; color: #c2410c;">${pending1}</div>
+                                    <div style="font-size: 11px; color: #9a3412; margin-top: 4px; font-weight: 500;">1-2 Days Due</div>
+                                </div>
+                                <div style="background: #fef2f2; padding: 15px; border-radius: 10px; border: 1px solid #fecaca; text-align: center;">
+                                    <div style="font-size: 22px; font-weight: 700; color: #dc2626;">${pending3}</div>
+                                    <div style="font-size: 11px; color: #991b1b; margin-top: 4px; font-weight: 500;">3+ Days Due</div>
                                 </div>
                             </div>
-                        `;
+                            
+                            <div style="background-color: #ffffff; border-radius: 12px; padding: 25px; border: 1px solid #e2e8f0;">
+                                <h3 style="margin-top: 0; color: #1e293b; font-size: 15px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; font-weight: 600;">Department Breakdown</h3>
+                                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                                    <thead>
+                                        <tr style="border-bottom: 2px solid #e2e8f0; color: #475569; font-weight: 600;">
+                                            <th style="padding: 8px 0; text-align: left;">Department</th>
+                                            <th style="padding: 8px 0; text-align: center;">Filled Today</th>
+                                            <th style="padding: 8px 0; text-align: center;">1-2 Days Due</th>
+                                            <th style="padding: 8px 0; text-align: center;">3+ Days Due</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${depts.map(d => {
+                                            const dResults = results.filter(r => r.Department === d && r.hasTable);
+                                            const f = dResults.filter(r => r.diffDays === 0).length;
+                                            const d1 = dResults.filter(r => r.diffDays === 1 || r.diffDays === 2).length;
+                                            const d3 = dResults.filter(r => r.diffDays >= 3).length;
+                                            return `
+                                                <tr style="border-bottom: 1px solid #f1f5f9;">
+                                                    <td style="padding: 10px 0; font-weight: 600; color: #0f172a;">${d}</td>
+                                                    <td style="padding: 10px 0; text-align: center; color: #16a34a; font-weight: 600;">${f}</td>
+                                                    <td style="padding: 10px 0; text-align: center; color: #ea580c; font-weight: 600;">${d1}</td>
+                                                    <td style="padding: 10px 0; text-align: center; color: #dc2626; font-weight: 600;">${d3}</td>
+                                                </tr>
+                                            `;
+                                        }).join("")}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
 
-                        fetch("https://api.brevo.com/v3/smtp/email", {
-                            method: "POST",
-                            headers: {
-                                "accept": "application/json",
-                                "api-key": process.env.BREVO_API_KEY || "",
-                                "content-type": "application/json"
-                            },
-                            body: JSON.stringify({
-                                sender: { name: "Pixeltruth Scheduler", email: "pixeltruth.notify@gmail.com" },
-                                to: directorEmails.map(email => ({ email })),
-                                cc: [{ email: "jigyasha.pathak@pixeltruth.com", name: "Jigyasha Pathak" }],
-                                subject: `👑 Executive Summary: Daily Filing Report - ${formattedDate}`,
-                                htmlContent: globalHtml
-                            })
-                        }).then(() => {
-                            console.log("✅ Sent global summary to Directors.");
-                            if (res) res.json({ success: true, message: "Summary sent to leads, individuals, and directors successfully." });
-                        }).catch(err => {
-                            console.error("❌ Failed to send global summary to Directors:", err);
-                            if (res) res.json({ success: true, message: "Summary sent to leads and individuals." });
+                    try {
+                        const dispatchResult = await dispatchUnifiedEmail({
+                            to: directorEmails,
+                            cc: ["jigyasha.pathak@pixeltruth.com"],
+                            subject: `👑 Executive Summary: Daily Filing Report - ${formattedDate}`,
+                            htmlContent: globalHtml
                         });
-                    } else {
-                        if (res) res.json({ success: true, message: "Summary sent to leads and individuals." });
+
+                        console.log(`✅ Sent global summary to Directors via ${dispatchResult.provider}.`);
+
+                        // Log successful night run in mis_cron_status ONLY after successful delivery
+                        db.query("INSERT INTO mis_cron_status (last_run_date, run_type) VALUES (?, 'night')", [todayStr], (insErr) => {
+                            if (insErr) console.error("❌ Failed to log night run in mis_cron_status:", insErr.message);
+                            else console.log(`✅ Successfully logged night run for ${todayStr} in mis_cron_status.`);
+                        });
+
+                        if (res) {
+                            return res.json({
+                                success: true,
+                                provider: dispatchResult.provider,
+                                message: "Executive Summary sent to Directors successfully.",
+                                recipients: directorEmails,
+                                cc: ["jigyasha.pathak@pixeltruth.com"],
+                                stats: {
+                                    totalEmployees,
+                                    filledToday,
+                                    pending1,
+                                    pending3
+                                }
+                            });
+                        }
+                    } catch (dispatchErr) {
+                        console.error("❌ Failed to send global summary to Directors:", dispatchErr.message);
+                        if (res) {
+                            return res.status(500).json({
+                                success: false,
+                                message: "Failed to send Daily Executive Summary email to Directors.",
+                                error: dispatchErr.message,
+                                brevoError: dispatchErr.brevoError,
+                                smtpError: dispatchErr.smtpError,
+                                recipients: directorEmails
+                            });
+                        }
                     }
                 });
             });
@@ -1961,11 +2119,15 @@ const runDuesCheckIfNeeded = () => {
 
     // Check last runs in database
     db.query("SELECT run_type, last_run_date FROM mis_cron_status ORDER BY id DESC LIMIT 50", (err, rows) => {
-        if (err) return;
+        if (err) {
+            console.error("❌ Error querying mis_cron_status:", err.message);
+            return;
+        }
 
-        const hasRunToday = (type) => rows.some(r => r.run_type === type && r.last_run_date === todayStr);
+        const safeRows = rows || [];
+        const hasRunToday = (type) => safeRows.some(r => r.run_type === type && r.last_run_date === todayStr);
         const lastRunDateOfType = (type) => {
-            const match = rows.find(r => r.run_type === type);
+            const match = safeRows.find(r => r.run_type === type);
             return match ? match.last_run_date : "";
         };
 
@@ -1984,47 +2146,75 @@ const runDuesCheckIfNeeded = () => {
         // 1. NIGHT RUN (Filing status summaries & global executive report):
         // Run if:
         // - Hour is >= 18 (6:00 PM IST) AND not run today yet.
-        // - OR: today is a new day, we haven't run today's night summary yet, AND yesterday's night summary was MISSED (i.e. last night run is older than yesterday).
+        // - OR: today is a new day, we haven't run today's night summary yet, AND yesterday's night summary was MISSED
         const lastNightRun = lastRunDateOfType("night");
         const missedYesterdayNightSummary = lastNightRun !== "" && lastNightRun !== todayStr && lastNightRun !== yesterdayStr;
 
         if ((currentHour >= 18 && !hasRunToday("night")) || (missedYesterdayNightSummary && !hasRunToday("night"))) {
-            db.query("INSERT INTO mis_cron_status (last_run_date, run_type) VALUES (?, 'night')", [todayStr], (err) => {
-                if (!err) {
-                    console.log("⏰ Auto-Cron: Triggering night summary run...");
-                    executeDuesCheckLogic("night");
-                }
-            });
+            console.log("⏰ Auto-Cron: Triggering night summary run...");
+            executeDuesCheckLogic("night");
             return;
         }
 
         // 2. EVENING RUN (Warnings CC'd to Project Lead): Run if hour is >= 16 (4:00 PM IST) and not run today yet
         if (currentHour >= 16 && !hasRunToday("evening")) {
-            db.query("INSERT INTO mis_cron_status (last_run_date, run_type) VALUES (?, 'evening')", [todayStr], (err) => {
-                if (!err) {
-                    console.log("⏰ Auto-Cron: Triggering evening warning run...");
-                    executeDuesCheckLogic("evening");
-                }
-            });
+            console.log("⏰ Auto-Cron: Triggering evening warning run...");
+            executeDuesCheckLogic("evening");
             return;
         }
 
         // 3. MORNING RUN (Warnings CC'd to Project Lead): Run if hour is >= 10 (10:00 AM IST) and not run today yet
         if (currentHour >= 10 && !hasRunToday("morning")) {
-            db.query("INSERT INTO mis_cron_status (last_run_date, run_type) VALUES (?, 'morning')", [todayStr], (err) => {
-                if (!err) {
-                    console.log("⏰ Auto-Cron: Triggering morning warning run...");
-                    executeDuesCheckLogic("morning");
-                }
-            });
+            console.log("⏰ Auto-Cron: Triggering morning warning run...");
+            executeDuesCheckLogic("morning");
             return;
         }
     });
 };
 
+// Background Cron Timer (checks every 15 minutes)
+setInterval(() => {
+    try {
+        runDuesCheckIfNeeded();
+    } catch (cronErr) {
+        console.error("❌ Scheduled cron interval error:", cronErr.message);
+    }
+}, 15 * 60 * 1000);
+
+// Endpoint to manually trigger cron check or summary run
 app.get("/api/cron/check-dues", (req, res) => {
     const runType = req.query.runType || "night";
     executeDuesCheckLogic(runType, res);
+});
+
+// Endpoint to view cron status and email diagnostic info
+app.get("/api/cron/status", (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+
+    const istNow = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Kolkata",
+        dateStyle: "full",
+        timeStyle: "medium"
+    }).format(new Date());
+
+    db.query("SELECT * FROM mis_cron_status ORDER BY id DESC LIMIT 20", (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        db.query("SELECT User_Mail, User_Name, Role, Designation FROM mis_user_data WHERE is_archived = 0 AND (Role = 'Director' OR Role = 'Admin')", (dErr, directors) => {
+            const cleanedDirectors = cleanEmailRecipients((directors || []).map(d => d.User_Mail));
+            res.json({
+                currentTimeIST: istNow,
+                providers: {
+                    brevoConfigured: !!(process.env.BREVO_API_KEY && process.env.BREVO_API_KEY.trim()),
+                    brevoSender: process.env.BREVO_SENDER_EMAIL || "pixeltruth.notify@gmail.com",
+                    smtpConfigured: !!(process.env.SMTP_PASS && process.env.SMTP_PASS !== "pixeltruth_pass"),
+                    smtpUser: process.env.SMTP_USER || "operations@pixeltruth.com"
+                },
+                directorRecipients: cleanedDirectors,
+                recentCronRuns: rows || []
+            });
+        });
+    });
 });
 
 /* ======================
@@ -4351,30 +4541,7 @@ app.get("/getAssignedShifts", (req, res) => {
 
 });
 
-// Clean and format recipient emails: strips 'admin_', removes test emails (.admin / director)
-const cleanEmailRecipients = (emails) => {
-    const cleaned = [];
-    emails.forEach(email => {
-        if (!email) return;
-        let cleanedEmail = email.trim().toLowerCase();
 
-        // 1. If email starts with 'admin_', strip it
-        if (cleanedEmail.startsWith("admin_")) {
-            cleanedEmail = cleanedEmail.substring(6);
-        }
-
-        // 2. Ignore test IDs (contains '.admin' or contains 'director@')
-        if (cleanedEmail.includes(".admin") || cleanedEmail.includes("director@")) {
-            return;
-        }
-
-        // 3. Simple validation & uniqueness
-        if (cleanedEmail.includes("@") && cleanedEmail.includes(".") && !cleaned.includes(cleanedEmail)) {
-            cleaned.push(cleanedEmail);
-        }
-    });
-    return cleaned;
-};
 
 // Helper to send work log submission email via Brevo HTTP API
 const sendSubmissionEmail = (user_mail, department, date, rawData) => {
@@ -4479,40 +4646,17 @@ const sendSubmissionEmail = (user_mail, department, date, rawData) => {
                 </div>
             `;
 
-            // Prepare Brevo API recipients list
-            const toPayload = recipients.map(email => ({ email }));
-
-            fetch("https://api.brevo.com/v3/smtp/email", {
-                method: "POST",
-                headers: {
-                    "accept": "application/json",
-                    "api-key": process.env.BREVO_API_KEY || "",
-                    "content-type": "application/json"
-                },
-                body: JSON.stringify({
-                    sender: {
-                        name: "Pixeltruth Scheduler",
-                        email: "pixeltruth.notify@gmail.com"
-                    },
-                    to: toPayload,
-                    cc: [{ email: "jigyasha.pathak@pixeltruth.com", name: "Jigyasha Pathak" }],
-                    subject: `📝 Work Log Submitted: ${employeeName} - ${formattedDate}`,
-                    htmlContent: htmlContent
-                })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.text().then(text => {
-                        throw new Error(`Brevo HTTP Error: ${response.status} - ${text}`);
-                    });
-                }
-                return response.json();
+            dispatchUnifiedEmail({
+                to: recipients,
+                cc: ["jigyasha.pathak@pixeltruth.com"],
+                subject: `📝 Work Log Submitted: ${employeeName} - ${formattedDate}`,
+                htmlContent: htmlContent
             })
             .then(data => {
-                console.log("✅ Work log submission notification sent successfully via Brevo to:", recipients, data);
+                console.log(`✅ Work log submission notification sent successfully via ${data.provider} to:`, recipients);
             })
             .catch(error => {
-                console.error("❌ Error sending work log submission email via Brevo:", error);
+                console.error("❌ Error sending work log submission email:", error.message);
             });
         });
     });
@@ -4610,42 +4754,17 @@ const sendShiftEmailNotification = (user_mail, shift_id, shift_date, assigned_by
                     </div>
                 `;
 
-                fetch("https://api.brevo.com/v3/smtp/email", {
-                    method: "POST",
-                    headers: {
-                        "accept": "application/json",
-                        "api-key": process.env.BREVO_API_KEY || "",
-                        "content-type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        sender: {
-                            name: "Pixeltruth Scheduler",
-                            email: "pixeltruth.notify@gmail.com"
-                        },
-                        to: [
-                            {
-                                email: user_mail,
-                                name: employeeName
-                            }
-                        ],
-                        cc: [{ email: "jigyasha.pathak@pixeltruth.com", name: "Jigyasha Pathak" }],
-                        subject: `🚨 New Shift Assigned: ${formattedDate}`,
-                        htmlContent: htmlContent
-                    })
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        return response.text().then(text => {
-                            throw new Error(`Brevo HTTP Error: ${response.status} - ${text}`);
-                        });
-                    }
-                    return response.json();
+                dispatchUnifiedEmail({
+                    to: [{ email: user_mail, name: employeeName }],
+                    cc: ["jigyasha.pathak@pixeltruth.com"],
+                    subject: `🚨 New Shift Assigned: ${formattedDate}`,
+                    htmlContent: htmlContent
                 })
                 .then(data => {
-                    console.log("✅ Shift notification email sent successfully via Brevo HTTP API to:", user_mail, data);
+                    console.log(`✅ Shift notification email sent successfully via ${data.provider} to:`, user_mail);
                 })
                 .catch(error => {
-                    console.error("❌ Error sending shift notification email via Brevo HTTP API:", error);
+                    console.error("❌ Error sending shift notification email:", error.message);
                 });
             });
         });
