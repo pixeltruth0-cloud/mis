@@ -6439,7 +6439,7 @@ app.get("/getLMSAdminAnalytics", (req, res) => {
   const { department, course_id, search } = req.query;
 
   // Query 1: Members currently active (heartbeat within last 120 seconds)
-  const activeSql = `
+  let activeSql = `
     SELECT 
       p.id,
       p.user_mail,
@@ -6462,8 +6462,13 @@ app.get("/getLMSAdminAnalytics", (req, res) => {
     LEFT JOIN mis_lms_lessons l ON l.id = p.lesson_id
     LEFT JOIN mis_user_data u ON LOWER(u.User_Mail) = LOWER(p.user_mail)
     WHERE p.last_heartbeat >= NOW() - INTERVAL 120 SECOND
-    ORDER BY p.last_heartbeat DESC
   `;
+  const activeParams = [];
+  if (department && department.trim() !== "") {
+    activeSql += " AND (c.department = ? OR u.Department = ?)";
+    activeParams.push(department.trim(), department.trim());
+  }
+  activeSql += " ORDER BY p.last_heartbeat DESC";
 
   // Query 2: Member aggregated course progress
   let progressSql = `
@@ -6511,7 +6516,7 @@ app.get("/getLMSAdminAnalytics", (req, res) => {
   `;
 
   // Query 3: Detailed lesson-level logs
-  const detailsSql = `
+  let detailsSql = `
     SELECT 
       p.id,
       p.user_mail,
@@ -6536,17 +6541,22 @@ app.get("/getLMSAdminAnalytics", (req, res) => {
     JOIN mis_lms_courses c ON c.id = p.course_id
     JOIN mis_lms_lessons l ON l.id = p.lesson_id
     LEFT JOIN mis_user_data u ON LOWER(u.User_Mail) = LOWER(p.user_mail)
-    ORDER BY p.last_heartbeat DESC
-    LIMIT 250
+    WHERE 1=1
   `;
+  const detailsParams = [];
+  if (department && department.trim() !== "") {
+    detailsSql += " AND (c.department = ? OR u.Department = ?)";
+    detailsParams.push(department.trim(), department.trim());
+  }
+  detailsSql += " ORDER BY p.last_heartbeat DESC LIMIT 250";
 
-  db.query(activeSql, (err1, activeRows) => {
+  db.query(activeSql, activeParams, (err1, activeRows) => {
     if (err1) return res.json({ success: false, message: err1.message });
 
     db.query(progressSql, params, (err2, progressRows) => {
       if (err2) return res.json({ success: false, message: err2.message });
 
-      db.query(detailsSql, (err3, detailRows) => {
+      db.query(detailsSql, detailsParams, (err3, detailRows) => {
         if (err3) return res.json({ success: false, message: err3.message });
 
         res.json({
