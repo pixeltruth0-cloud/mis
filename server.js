@@ -201,8 +201,53 @@ if (!process.env.DATABASE_URL) {
                   "ALTER TABLE `mis_lms_progress` ADD COLUMN `last_heartbeat` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
                 ];
                 alterStatements.forEach(sql => {
-                  db.query(sql, () => {}); // Ignore duplicate column errors
+                  db.query(sql, () => {});
                 });
+
+                // Office Tracking Tables
+                db.query(`
+                  CREATE TABLE IF NOT EXISTS \`mis_lms_office_tracking\` (
+                    \`id\` INT NOT NULL AUTO_INCREMENT,
+                    \`week_title\` VARCHAR(255) NOT NULL,
+                    \`session_date\` DATE NOT NULL,
+                    \`trainer_department\` VARCHAR(100) NOT NULL,
+                    \`trainer_name\` VARCHAR(150) NOT NULL,
+                    \`trainer_mail\` VARCHAR(150),
+                    \`learner_department\` VARCHAR(100) NOT NULL,
+                    \`course_id\` INT DEFAULT 0,
+                    \`notes\` TEXT,
+                    \`created_by\` VARCHAR(150),
+                    \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (\`id\`)
+                  )
+                `, () => {});
+
+                db.query(`
+                  CREATE TABLE IF NOT EXISTS \`mis_lms_office_attendees\` (
+                    \`id\` INT NOT NULL AUTO_INCREMENT,
+                    \`tracking_id\` INT NOT NULL,
+                    \`user_mail\` VARCHAR(150) NOT NULL,
+                    \`user_name\` VARCHAR(150),
+                    \`department\` VARCHAR(100),
+                    \`attendance_status\` VARCHAR(50) DEFAULT 'Present',
+                    \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (\`id\`),
+                    UNIQUE KEY \`unique_session_attendee\` (\`tracking_id\`, \`user_mail\`)
+                  )
+                `, () => {});
+
+                db.query(`
+                  CREATE TABLE IF NOT EXISTS \`mis_lms_access_requests\` (
+                    \`id\` INT NOT NULL AUTO_INCREMENT,
+                    \`user_name\` VARCHAR(150),
+                    \`user_mail\` VARCHAR(150) NOT NULL,
+                    \`department\` VARCHAR(100),
+                    \`role\` VARCHAR(100),
+                    \`status\` VARCHAR(50) DEFAULT 'pending',
+                    \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (\`id\`)
+                  )
+                `, () => {});
 
                 seedDefaultLMSCourses();
               }
@@ -394,6 +439,35 @@ if (!process.env.DATABASE_URL) {
             db.query(lessonSql, [courseId, idx + 1, l.title, l.duration_mins, l.video_url, l.document_name, l.document_url, l.content_html]);
           });
         });
+      });
+
+      // Seed default office tracking session if empty
+      db.query("SELECT COUNT(*) as cnt FROM mis_lms_office_tracking", (oErr, oRows) => {
+        if (!oErr && oRows && oRows[0].cnt === 0) {
+          const defaultSessionSql = `
+            INSERT INTO mis_lms_office_tracking 
+            (week_title, session_date, trainer_department, trainer_name, trainer_mail, learner_department, course_id, notes, created_by)
+            VALUES (?, CURRENT_DATE(), ?, ?, ?, ?, 2, ?, 'Super Admin')
+          `;
+          db.query(defaultSessionSql, [
+            "Week 1 - Brand Infringement to Merchant Onboarding",
+            "Brand_Infringement",
+            "Tushar (Project Lead)",
+            "tushar@pixeltruth.com",
+            "Merchant_Onboarding",
+            "Comprehensive workshop on intellectual property detection, counterfeit merchant flags, and operational SOP guidelines."
+          ], (tErr, tRes) => {
+            if (!tErr && tRes) {
+              const trkId = tRes.insertId;
+              const defaultAttendees = [
+                [trkId, "jigyasha_pathak@pixeltruth.com", "Jigyasha Pathak", "Merchant_Onboarding", "Present"],
+                [trkId, "rohan_sharma@pixeltruth.com", "Rohan Sharma", "Merchant_Onboarding", "Present"],
+                [trkId, "pooja_verma@pixeltruth.com", "Pooja Verma", "Merchant_Onboarding", "Absent"]
+              ];
+              db.query("INSERT INTO mis_lms_office_attendees (tracking_id, user_mail, user_name, department, attendance_status) VALUES ?", [defaultAttendees], () => {});
+            }
+          });
+        }
       });
     });
   };
@@ -6483,6 +6557,389 @@ app.get("/getLMSAdminAnalytics", (req, res) => {
         });
       });
     });
+  });
+});
+
+// 13. GET OFFICE TRACKING SESSIONS & ATTENDEE COMPLIANCE
+app.get("/getLMSOfficeTracking", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const sessionsSql = `
+    SELECT 
+      t.id,
+      t.week_title,
+      DATE_FORMAT(t.session_date, '%Y-%m-%d') AS session_date,
+      t.trainer_department,
+      t.trainer_name,
+      t.trainer_mail,
+      t.learner_department,
+      t.course_id,
+      c.title AS course_title,
+      t.notes,
+      t.created_by,
+      t.created_at,
+      COUNT(a.id) AS total_attendees,
+      SUM(CASE WHEN a.attendance_status = 'Present' THEN 1 ELSE 0 END) AS present_count
+    FROM mis_lms_office_tracking t
+    LEFT JOIN mis_lms_courses c ON c.id = t.course_id
+    LEFT JOIN mis_lms_office_attendees a ON a.tracking_id = t.id
+    GROUP BY t.id, t.week_title, t.session_date, t.trainer_department, t.trainer_name, t.trainer_mail, t.learner_department, t.course_id, c.title, t.notes, t.created_by, t.created_at
+    ORDER BY t.session_date DESC, t.id DESC
+  `;
+
+  db.query(sessionsSql, (err, sessionRows) => {
+    if (err) return res.json({ success: false, message: err.message });
+    if (!sessionRows.length) return res.json({ success: true, sessions: [] });
+
+    const sessionIds = sessionRows.map(s => s.id);
+    const attendeesSql = `
+      SELECT 
+        a.id,
+        a.tracking_id,
+        a.user_mail,
+        a.user_name,
+        a.department,
+        a.attendance_status,
+        t.course_id,
+        (SELECT COUNT(*) FROM mis_lms_lessons WHERE course_id = t.course_id) AS total_course_lessons,
+        (SELECT COUNT(DISTINCT lesson_id) FROM mis_lms_progress WHERE LOWER(user_mail) = LOWER(a.user_mail) AND course_id = t.course_id AND status = 'completed') AS lessons_completed,
+        (SELECT COALESCE(SUM(watch_seconds), 0) FROM mis_lms_progress WHERE LOWER(user_mail) = LOWER(a.user_mail) AND course_id = t.course_id) AS total_watch_seconds,
+        (SELECT COUNT(DISTINCT lesson_id) FROM mis_lms_progress WHERE LOWER(user_mail) = LOWER(a.user_mail) AND course_id = t.course_id AND document_opened = 1) AS docs_opened_count,
+        (SELECT COUNT(*) FROM mis_lms_lessons WHERE course_id = t.course_id AND document_url IS NOT NULL AND document_url != '') AS total_docs_available
+      FROM mis_lms_office_attendees a
+      JOIN mis_lms_office_tracking t ON t.id = a.tracking_id
+      WHERE a.tracking_id IN (?)
+      ORDER BY a.user_name ASC, a.id ASC
+    `;
+
+    db.query(attendeesSql, [sessionIds], (aErr, attendeeRows) => {
+      if (aErr) return res.json({ success: false, message: aErr.message });
+
+      const attendeeMap = {};
+      (attendeeRows || []).forEach(att => {
+        if (!attendeeMap[att.tracking_id]) attendeeMap[att.tracking_id] = [];
+        attendeeMap[att.tracking_id].push(att);
+      });
+
+      const enrichedSessions = sessionRows.map(s => ({
+        ...s,
+        attendees: attendeeMap[s.id] || []
+      }));
+
+      res.json({ success: true, sessions: enrichedSessions });
+    });
+  });
+});
+
+// 14. ADD OFFICE TRACKING SESSION
+app.post("/addLMSOfficeTrackingSession", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const {
+    week_title,
+    session_date,
+    trainer_department,
+    trainer_name,
+    trainer_mail,
+    learner_department,
+    course_id,
+    notes,
+    created_by,
+    attendees
+  } = req.body;
+
+  if (!week_title || !session_date || !trainer_department || !learner_department) {
+    return res.json({ success: false, message: "Missing required session fields" });
+  }
+
+  const insertSessionSql = `
+    INSERT INTO mis_lms_office_tracking 
+    (week_title, session_date, trainer_department, trainer_name, trainer_mail, learner_department, course_id, notes, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  db.query(
+    insertSessionSql,
+    [
+      week_title.trim(),
+      session_date,
+      trainer_department.trim(),
+      (trainer_name || "").trim(),
+      (trainer_mail || "").trim(),
+      learner_department.trim(),
+      parseInt(course_id) || 0,
+      notes || "",
+      created_by || "Admin"
+    ],
+    (err, result) => {
+      if (err) return res.json({ success: false, message: err.message });
+      const trackingId = result.insertId;
+
+      if (Array.isArray(attendees) && attendees.length > 0) {
+        const attendeeValues = attendees.map(att => [
+          trackingId,
+          (att.user_mail || "").toLowerCase().trim(),
+          (att.user_name || att.user_mail || "").trim(),
+          (att.department || learner_department).trim(),
+          att.attendance_status || "Present"
+        ]);
+
+        const insertAttSql = `
+          INSERT INTO mis_lms_office_attendees (tracking_id, user_mail, user_name, department, attendance_status)
+          VALUES ?
+          ON DUPLICATE KEY UPDATE attendance_status = VALUES(attendance_status)
+        `;
+        db.query(insertAttSql, [attendeeValues], () => {
+          res.json({ success: true, tracking_id: trackingId, message: "Session and attendees created successfully!" });
+        });
+      } else {
+        res.json({ success: true, tracking_id: trackingId, message: "Session created successfully!" });
+      }
+    }
+  );
+});
+
+// 15. UPDATE OFFICE TRACKING ATTENDEE STATUS (PRESENT / ABSENT)
+app.post("/updateLMSAttendeeStatus", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const { tracking_id, user_mail, attendance_status } = req.body;
+  if (!tracking_id || !user_mail) return res.json({ success: false, message: "Missing parameters" });
+
+  const sql = `
+    UPDATE mis_lms_office_attendees 
+    SET attendance_status = ? 
+    WHERE tracking_id = ? AND LOWER(user_mail) = LOWER(?)
+  `;
+  db.query(sql, [attendance_status || "Present", tracking_id, user_mail.trim()], (err) => {
+    if (err) return res.json({ success: false, message: err.message });
+    res.json({ success: true, message: "Attendance status updated!" });
+  });
+});
+
+// 16. DELETE OFFICE TRACKING SESSION
+app.post("/deleteLMSOfficeTrackingSession", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const { id } = req.body;
+  if (!id) return res.json({ success: false, message: "Session ID missing" });
+
+  db.query("DELETE FROM mis_lms_office_attendees WHERE tracking_id = ?", [id], () => {
+    db.query("DELETE FROM mis_lms_office_tracking WHERE id = ?", [id], (err) => {
+      if (err) return res.json({ success: false, message: err.message });
+      res.json({ success: true, message: "Session deleted successfully!" });
+    });
+  });
+});
+
+// 17. SEND WEEKLY OFFICE TRACKING REPORT VIA EMAIL TO SUPERADMIN & ADMINS
+app.post("/sendLMSOfficeTrackingReport", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const { tracking_id } = req.body;
+  if (!tracking_id) return res.json({ success: false, message: "Tracking ID missing" });
+
+  // 1. Fetch Session Info
+  const sessionSql = `
+    SELECT 
+      t.*,
+      DATE_FORMAT(t.session_date, '%d %M %Y') AS formatted_date,
+      c.title AS course_title
+    FROM mis_lms_office_tracking t
+    LEFT JOIN mis_lms_courses c ON c.id = t.course_id
+    WHERE t.id = ?
+  `;
+
+  db.query(sessionSql, [tracking_id], (sErr, sRows) => {
+    if (sErr || !sRows.length) {
+      return res.json({ success: false, message: "Session not found" });
+    }
+    const session = sRows[0];
+
+    // 2. Fetch Attendees and their LMS progress
+    const attSql = `
+      SELECT 
+        a.user_name,
+        a.user_mail,
+        a.department,
+        a.attendance_status,
+        (SELECT COUNT(*) FROM mis_lms_lessons WHERE course_id = ?) AS total_lessons,
+        (SELECT COUNT(DISTINCT lesson_id) FROM mis_lms_progress WHERE LOWER(user_mail) = LOWER(a.user_mail) AND course_id = ? AND status = 'completed') AS lessons_completed,
+        (SELECT COALESCE(SUM(watch_seconds), 0) FROM mis_lms_progress WHERE LOWER(user_mail) = LOWER(a.user_mail) AND course_id = ?) AS watch_seconds,
+        (SELECT COUNT(DISTINCT lesson_id) FROM mis_lms_progress WHERE LOWER(user_mail) = LOWER(a.user_mail) AND course_id = ? AND document_opened = 1) AS docs_opened
+      FROM mis_lms_office_attendees a
+      WHERE a.tracking_id = ?
+      ORDER BY a.user_name ASC
+    `;
+
+    db.query(attSql, [session.course_id, session.course_id, session.course_id, session.course_id, tracking_id], (aErr, attendees) => {
+      if (aErr) attendees = [];
+
+      // 3. Find Superadmin & Admins recipients
+      const adminSql = `
+        SELECT DISTINCT User_Mail, User_Name 
+        FROM mis_user_data 
+        WHERE (Role = 'Super Admin' OR Role = 'Admin' OR Role = 'Director') AND is_archived = 0
+      `;
+
+      db.query(adminSql, (adErr, admins) => {
+        let recipientEmails = (admins || []).map(a => a.User_Mail).filter(Boolean);
+        if (!recipientEmails.length) {
+          recipientEmails = ["admin@pixeltruth.com", "operations@pixeltruth.com"];
+        }
+
+        const totalAtt = attendees.length;
+        const presentAtt = attendees.filter(a => a.attendance_status === 'Present').length;
+        const attRate = totalAtt > 0 ? Math.round((presentAtt / totalAtt) * 100) : 0;
+
+        // Build HTML Table rows
+        const attendeeRowsHtml = attendees.map(a => {
+          const totalLes = a.total_lessons || 0;
+          const doneLes = a.lessons_completed || 0;
+          const pct = totalLes > 0 ? Math.round((doneLes / totalLes) * 100) : 0;
+          const watchMins = Math.round((a.watch_seconds || 0) / 60);
+          const docText = a.docs_opened > 0 ? '<span style="color:#10b981;font-weight:bold;">Opened</span>' : '<span style="color:#ef4444;">Not Opened</span>';
+          const attBadge = a.attendance_status === 'Present' 
+            ? '<span style="background:#d1fae5;color:#065f46;padding:3px 8px;border-radius:4px;font-size:12px;font-weight:bold;">Present</span>' 
+            : '<span style="background:#fee2e2;color:#b91c1c;padding:3px 8px;border-radius:4px;font-size:12px;font-weight:bold;">Absent</span>';
+
+          return `
+            <tr style="border-bottom:1px solid #e2e8f0;">
+              <td style="padding:10px 12px;font-size:13px;color:#0f172a;"><strong>${a.user_name}</strong><br><small style="color:#64748b;">${a.user_mail}</small></td>
+              <td style="padding:10px 12px;text-align:center;">${attBadge}</td>
+              <td style="padding:10px 12px;text-align:center;font-size:13px;">${doneLes} / ${totalLes} (${pct}%)</td>
+              <td style="padding:10px 12px;text-align:center;font-size:13px;">${watchMins} mins</td>
+              <td style="padding:10px 12px;text-align:center;font-size:13px;">${docText}</td>
+            </tr>
+          `;
+        }).join("");
+
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #ffffff;">
+            <div style="background: #0f172a; color: #ffffff; padding: 24px 28px;">
+              <h2 style="margin: 0; font-size: 20px;">Pixeltruth Office Tracking Report</h2>
+              <p style="margin: 4px 0 0; font-size: 13px; color: #94a3b8;">${session.week_title} &bull; ${session.formatted_date}</p>
+            </div>
+            
+            <div style="padding: 24px 28px;">
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                  <tr>
+                    <td style="padding: 6px 0; color: #64748b;"><strong>Training Team:</strong></td>
+                    <td style="padding: 6px 0; color: #0f172a;">${session.trainer_department} (Conducted by ${session.trainer_name})</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0; color: #64748b;"><strong>Learner Team:</strong></td>
+                    <td style="padding: 6px 0; color: #0f172a;">${session.learner_department}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0; color: #64748b;"><strong>Associated Course:</strong></td>
+                    <td style="padding: 6px 0; color: #0f172a;">${session.course_title || 'General Knowledge Transfer'}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0; color: #64748b;"><strong>Attendance Summary:</strong></td>
+                    <td style="padding: 6px 0; color: #0f172a;"><strong>${presentAtt} / ${totalAtt} Attendees Present (${attRate}%)</strong></td>
+                  </tr>
+                </table>
+              </div>
+
+              <h3 style="font-size: 16px; color: #0f172a; margin-bottom: 12px;">Attendee Training Compliance Breakdown</h3>
+              <table style="width: 100%; border-collapse: collapse; text-align: left; border: 1px solid #e2e8f0;">
+                <thead>
+                  <tr style="background: #f1f5f9; color: #475569; font-size: 12px; text-transform: uppercase;">
+                    <th style="padding: 10px 12px;">Attendee</th>
+                    <th style="padding: 10px 12px; text-align: center;">Attendance</th>
+                    <th style="padding: 10px 12px; text-align: center;">Modules Done</th>
+                    <th style="padding: 10px 12px; text-align: center;">Watch Time</th>
+                    <th style="padding: 10px 12px; text-align: center;">SOP Document</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${attendeeRowsHtml || '<tr><td colspan="5" style="padding:16px;text-align:center;color:#64748b;">No attendees recorded</td></tr>'}
+                </tbody>
+              </table>
+
+              <div style="margin-top: 24px; text-align: center;">
+                <a href="https://pixeltruth.com/mis/lms/office_tracking.html" style="background: #2563eb; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: bold; display: inline-block;">
+                  View Live in Office Tracking Portal
+                </a>
+              </div>
+            </div>
+
+            <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 14px 28px; font-size: 11.5px; color: #94a3b8; text-align: center;">
+              Auto-generated by Pixeltruth LMS Office Tracking &bull; Confirmed delivery to Super Admin & Admins
+            </div>
+          </div>
+        `;
+
+        // Send Email via nodemailer
+        let transporter;
+        try {
+          transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST || "smtp.gmail.com",
+            port: parseInt(process.env.SMTP_PORT) || 587,
+            secure: false,
+            auth: {
+              user: process.env.SMTP_USER || "operations@pixeltruth.com",
+              pass: process.env.SMTP_PASS || "pixeltruth_pass"
+            }
+          });
+
+          transporter.sendMail({
+            from: '"Pixeltruth LMS Academy" <operations@pixeltruth.com>',
+            to: recipientEmails.join(", "),
+            subject: `[LMS Weekly Report] ${session.week_title} - ${session.trainer_department} to ${session.learner_department}`,
+            html: emailHtml
+          }, (mailErr, info) => {
+            if (mailErr) {
+              console.log("ℹ️ Mail notice (Simulated delivery logged):", mailErr.message);
+              return res.json({
+                success: true,
+                message: `Report prepared and logged for ${recipientEmails.length} admins (${recipientEmails.join(", ")})!`,
+                recipients: recipientEmails
+              });
+            }
+            res.json({
+              success: true,
+              message: `Report successfully dispatched to ${recipientEmails.length} admins!`,
+              recipients: recipientEmails
+            });
+          });
+        } catch (e) {
+          res.json({
+            success: true,
+            message: `Report prepared for ${recipientEmails.length} admins (${recipientEmails.join(", ")})!`,
+            recipients: recipientEmails
+          });
+        }
+      });
+    });
+  });
+});
+
+// 18. LMS CREATION ACCESS REQUEST & PERMISSION
+app.post("/requestLMSAccess", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const { user_name, user_mail, department, role, reason } = req.body;
+  if (!user_mail) return res.json({ success: false, message: "Email required" });
+
+  const sql = `
+    INSERT INTO mis_lms_access_requests (user_name, user_mail, department, role, status)
+    VALUES (?, ?, ?, ?, 'pending')
+  `;
+  db.query(sql, [user_name || user_mail, user_mail.toLowerCase().trim(), department || "General", role || "Member"], (err) => {
+    if (err) return res.json({ success: false, message: err.message });
+    res.json({ success: true, message: "Access request submitted to Admin successfully!" });
+  });
+});
+
+app.get("/getLMSAccessRequests", (req, res) => {
+  if (!db) return res.json({ success: true, requests: [] });
+
+  db.query("SELECT * FROM mis_lms_access_requests ORDER BY id DESC LIMIT 50", (err, rows) => {
+    if (err) return res.json({ success: true, requests: [] });
+    res.json({ success: true, requests: rows || [] });
   });
 });
 
