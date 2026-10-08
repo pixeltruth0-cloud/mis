@@ -6087,15 +6087,14 @@ app.get("/getLMSCourses", (req, res) => {
       c.target_role,
       c.is_active,
       c.created_at,
-      COUNT(l.id) AS total_lessons,
-      COUNT(l.id) AS lesson_count,
-      COALESCE(SUM(l.duration_mins), 0) AS total_duration_mins,
-      COALESCE(SUM(l.duration_mins), 0) AS total_duration,
-      COUNT(CASE WHEN l.video_url IS NOT NULL AND l.video_url != '' THEN 1 END) AS total_videos,
-      COUNT(CASE WHEN l.document_url IS NOT NULL AND l.document_url != '' THEN 1 END) AS total_docs,
-      COUNT(CASE WHEN l.document_url IS NOT NULL AND l.document_url != '' THEN 1 END) AS doc_count
+      (SELECT COUNT(*) FROM mis_lms_lessons WHERE course_id = c.id) AS total_lessons,
+      (SELECT COUNT(*) FROM mis_lms_lessons WHERE course_id = c.id) AS lesson_count,
+      (SELECT COALESCE(SUM(duration_mins), 0) FROM mis_lms_lessons WHERE course_id = c.id) AS total_duration_mins,
+      (SELECT COALESCE(SUM(duration_mins), 0) FROM mis_lms_lessons WHERE course_id = c.id) AS total_duration,
+      (SELECT COUNT(*) FROM mis_lms_lessons WHERE course_id = c.id AND video_url IS NOT NULL AND video_url != '') AS total_videos,
+      (SELECT COUNT(*) FROM mis_lms_lessons WHERE course_id = c.id AND document_url IS NOT NULL AND document_url != '') AS total_docs,
+      (SELECT COUNT(*) FROM mis_lms_lessons WHERE course_id = c.id AND document_url IS NOT NULL AND document_url != '') AS doc_count
     FROM mis_lms_courses c
-    LEFT JOIN mis_lms_lessons l ON c.id = l.course_id
     WHERE c.is_active = 1
   `;
   const params = [];
@@ -6110,7 +6109,7 @@ app.get("/getLMSCourses", (req, res) => {
     params.push(`%${search.trim()}%`, `%${search.trim()}%`);
   }
 
-  sql += " GROUP BY c.id ORDER BY c.id ASC";
+  sql += " ORDER BY c.id ASC";
 
   db.query(sql, params, (err, rows) => {
     if (err) {
@@ -6396,18 +6395,18 @@ app.get("/getLMSAdminAnalytics", (req, res) => {
   let progressSql = `
     SELECT 
       p.user_mail,
-      COALESCE(u.User_Name, p.user_name, p.user_mail) AS user_name,
-      COALESCE(u.Department, c.department, 'General') AS department,
-      u.Role AS user_role,
-      c.id AS course_id,
-      c.title AS course_title,
-      c.department AS course_department,
+      p.course_id,
+      MAX(COALESCE(u.User_Name, p.user_name, p.user_mail)) AS user_name,
+      MAX(COALESCE(u.Department, c.department, 'General')) AS department,
+      MAX(u.Role) AS user_role,
+      MAX(c.title) AS course_title,
+      MAX(c.department) AS course_department,
       COUNT(DISTINCT p.lesson_id) AS lessons_viewed,
       SUM(CASE WHEN p.status = 'completed' THEN 1 ELSE 0 END) AS lessons_completed,
-      (SELECT COUNT(*) FROM mis_lms_lessons WHERE course_id = c.id) AS total_course_lessons,
+      (SELECT COUNT(*) FROM mis_lms_lessons WHERE course_id = p.course_id) AS total_course_lessons,
       SUM(COALESCE(p.watch_seconds, 0)) AS total_watch_seconds,
       SUM(CASE WHEN p.document_opened = 1 THEN 1 ELSE 0 END) AS docs_opened_count,
-      (SELECT COUNT(*) FROM mis_lms_lessons WHERE course_id = c.id AND document_url IS NOT NULL AND document_url != '') AS total_docs_available,
+      (SELECT COUNT(*) FROM mis_lms_lessons WHERE course_id = p.course_id AND document_url IS NOT NULL AND document_url != '') AS total_docs_available,
       MAX(p.last_heartbeat) AS last_active_at,
       TIMESTAMPDIFF(SECOND, MAX(p.last_heartbeat), NOW()) AS last_active_seconds_ago,
       CASE WHEN TIMESTAMPDIFF(SECOND, MAX(p.last_heartbeat), NOW()) <= 120 THEN 1 ELSE 0 END AS is_online_now
@@ -6433,7 +6432,7 @@ app.get("/getLMSAdminAnalytics", (req, res) => {
   }
 
   progressSql += `
-    GROUP BY p.user_mail, c.id
+    GROUP BY p.user_mail, p.course_id
     ORDER BY is_online_now DESC, last_active_at DESC
   `;
 
