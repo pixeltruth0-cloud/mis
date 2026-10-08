@@ -175,10 +175,15 @@ if (!process.env.DATABASE_URL) {
               CREATE TABLE IF NOT EXISTS \`mis_lms_progress\` (
                 \`id\` INT NOT NULL AUTO_INCREMENT,
                 \`user_mail\` VARCHAR(255) NOT NULL,
+                \`user_name\` VARCHAR(255) NULL,
                 \`course_id\` INT NOT NULL,
                 \`lesson_id\` INT NOT NULL,
-                \`status\` VARCHAR(50) DEFAULT 'completed',
-                \`completed_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                \`status\` VARCHAR(50) DEFAULT 'in_progress',
+                \`watch_seconds\` INT DEFAULT 0,
+                \`document_opened\` TINYINT(1) DEFAULT 0,
+                \`document_opened_at\` DATETIME NULL,
+                \`last_heartbeat\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                \`completed_at\` DATETIME NULL,
                 PRIMARY KEY (\`id\`),
                 UNIQUE KEY \`unique_user_lesson\` (\`user_mail\`, \`lesson_id\`)
               )
@@ -186,6 +191,19 @@ if (!process.env.DATABASE_URL) {
               if (pErr) console.error("❌ Error migrating mis_lms_progress table:", pErr);
               else {
                 console.log("✅ DB schema verification complete for mis_lms_progress.");
+
+                // Ensure columns exist if table was already created
+                const alterStatements = [
+                  "ALTER TABLE `mis_lms_progress` ADD COLUMN `user_name` VARCHAR(255) NULL",
+                  "ALTER TABLE `mis_lms_progress` ADD COLUMN `watch_seconds` INT DEFAULT 0",
+                  "ALTER TABLE `mis_lms_progress` ADD COLUMN `document_opened` TINYINT(1) DEFAULT 0",
+                  "ALTER TABLE `mis_lms_progress` ADD COLUMN `document_opened_at` DATETIME NULL",
+                  "ALTER TABLE `mis_lms_progress` ADD COLUMN `last_heartbeat` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+                ];
+                alterStatements.forEach(sql => {
+                  db.query(sql, () => {}); // Ignore duplicate column errors
+                });
+
                 seedDefaultLMSCourses();
               }
             });
@@ -6070,9 +6088,12 @@ app.get("/getLMSCourses", (req, res) => {
       c.is_active,
       c.created_at,
       COUNT(l.id) AS total_lessons,
+      COUNT(l.id) AS lesson_count,
       COALESCE(SUM(l.duration_mins), 0) AS total_duration_mins,
+      COALESCE(SUM(l.duration_mins), 0) AS total_duration,
       COUNT(CASE WHEN l.video_url IS NOT NULL AND l.video_url != '' THEN 1 END) AS total_videos,
-      COUNT(CASE WHEN l.document_url IS NOT NULL AND l.document_url != '' THEN 1 END) AS total_docs
+      COUNT(CASE WHEN l.document_url IS NOT NULL AND l.document_url != '' THEN 1 END) AS total_docs,
+      COUNT(CASE WHEN l.document_url IS NOT NULL AND l.document_url != '' THEN 1 END) AS doc_count
     FROM mis_lms_courses c
     LEFT JOIN mis_lms_lessons l ON c.id = l.course_id
     WHERE c.is_active = 1
@@ -6230,32 +6251,44 @@ app.post("/deleteLMSLesson", (req, res) => {
   });
 });
 
-// 8. UPDATE PROGRESS (MARK COMPLETED)
+// 8. UPDATE PROGRESS (MARK COMPLETED / IN PROGRESS)
 app.post("/updateLMSProgress", (req, res) => {
   if (!db) return res.json({ success: false });
 
-  const { user_mail, course_id, lesson_id } = req.body;
+  const { user_mail, user_name, course_id, lesson_id, status } = req.body;
   if (!user_mail || !lesson_id) return res.json({ success: false });
 
+  const newStatus = status === "in_progress" ? "in_progress" : "completed";
+  const email = user_mail.toLowerCase().trim();
+  const name = user_name || email.split("@")[0];
+
   const sql = `
-    INSERT INTO mis_lms_progress (user_mail, course_id, lesson_id, status)
-    VALUES (?, ?, ?, 'completed')
-    ON DUPLICATE KEY UPDATE status = 'completed', completed_at = CURRENT_TIMESTAMP
+    INSERT INTO mis_lms_progress (user_mail, user_name, course_id, lesson_id, status, completed_at, last_heartbeat)
+    VALUES (?, ?, ?, ?, ?, IF(? = 'completed', NOW(), NULL), NOW())
+    ON DUPLICATE KEY UPDATE 
+      user_name = COALESCE(?, user_name),
+      status = ?, 
+      completed_at = IF(? = 'completed', NOW(), NULL),
+      last_heartbeat = NOW()
   `;
-  db.query(sql, [user_mail.toLowerCase().trim(), course_id || 0, lesson_id], (err) => {
+  db.query(sql, [email, name, course_id || 0, lesson_id, newStatus, newStatus, name, newStatus, newStatus], (err) => {
     if (err) return res.json({ success: false, message: err.message });
-    res.json({ success: true, message: "Lesson marked as completed!" });
+    res.json({ success: true, status: newStatus, message: `Lesson marked as ${newStatus}!` });
   });
 });
 
 // 9. GET USER PROGRESS
 app.get("/getLMSProgress", (req, res) => {
-  if (!db) return res.json({ success: true, completed_lessons: [] });
+  if (!db) return res.json({ success: true, completed_lessons: [], progress_list: [] });
 
   const { user_mail, course_id } = req.query;
-  if (!user_mail) return res.json({ success: true, completed_lessons: [] });
+  if (!user_mail) return res.json({ success: true, completed_lessons: [], progress_list: [] });
 
-  let sql = "SELECT lesson_id FROM mis_lms_progress WHERE LOWER(user_mail) = LOWER(?)";
+  let sql = `
+    SELECT lesson_id, status, watch_seconds, document_opened, document_opened_at, completed_at, last_heartbeat 
+    FROM mis_lms_progress 
+    WHERE LOWER(user_mail) = LOWER(?)
+  `;
   const params = [user_mail.trim()];
 
   if (course_id) {
@@ -6264,10 +6297,192 @@ app.get("/getLMSProgress", (req, res) => {
   }
 
   db.query(sql, params, (err, rows) => {
-    if (err) return res.json({ success: true, completed_lessons: [] });
+    if (err) return res.json({ success: true, completed_lessons: [], progress_list: [] });
+    const completed = rows.filter(r => r.status === "completed").map(r => r.lesson_id);
     res.json({
       success: true,
-      completed_lessons: rows.map(r => r.lesson_id)
+      completed_lessons: completed,
+      progress_list: rows
+    });
+  });
+});
+
+// 10. REAL-TIME ACTIVITY & WATCH TIME HEARTBEAT
+app.post("/trackLMSActivity", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const { user_mail, user_name, course_id, lesson_id, watch_seconds_delta } = req.body;
+  if (!user_mail || !lesson_id) return res.json({ success: false, message: "Missing required fields" });
+
+  const delta = Math.max(0, parseInt(watch_seconds_delta) || 0);
+  const email = user_mail.toLowerCase().trim();
+  const name = user_name || email.split("@")[0];
+
+  const sql = `
+    INSERT INTO mis_lms_progress (user_mail, user_name, course_id, lesson_id, status, watch_seconds, last_heartbeat)
+    VALUES (?, ?, ?, ?, 'in_progress', ?, NOW())
+    ON DUPLICATE KEY UPDATE
+      user_name = COALESCE(?, user_name),
+      watch_seconds = watch_seconds + ?,
+      last_heartbeat = NOW()
+  `;
+
+  db.query(sql, [email, name, course_id || 0, lesson_id, delta, name, delta], (err) => {
+    if (err) return res.json({ success: false, message: err.message });
+    res.json({ success: true, message: "Heartbeat logged" });
+  });
+});
+
+// 11. TRACK DOCUMENT OPENED / DOWNLOADED
+app.post("/trackLMSDocOpen", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const { user_mail, user_name, course_id, lesson_id } = req.body;
+  if (!user_mail || !lesson_id) return res.json({ success: false, message: "Missing required fields" });
+
+  const email = user_mail.toLowerCase().trim();
+  const name = user_name || email.split("@")[0];
+
+  const sql = `
+    INSERT INTO mis_lms_progress (user_mail, user_name, course_id, lesson_id, status, document_opened, document_opened_at, last_heartbeat)
+    VALUES (?, ?, ?, ?, 'in_progress', 1, NOW(), NOW())
+    ON DUPLICATE KEY UPDATE
+      user_name = COALESCE(?, user_name),
+      document_opened = 1,
+      document_opened_at = COALESCE(document_opened_at, NOW()),
+      last_heartbeat = NOW()
+  `;
+
+  db.query(sql, [email, name, course_id || 0, lesson_id, name], (err) => {
+    if (err) return res.json({ success: false, message: err.message });
+    res.json({ success: true, message: "Document open tracked!" });
+  });
+});
+
+// 12. ADMIN ANALYTICS: WHO IS CURRENTLY WATCHING, TIME SPENT, & DOCS OPENED
+app.get("/getLMSAdminAnalytics", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const { department, course_id, search } = req.query;
+
+  // Query 1: Members currently active (heartbeat within last 120 seconds)
+  const activeSql = `
+    SELECT 
+      p.id,
+      p.user_mail,
+      COALESCE(u.User_Name, p.user_name, p.user_mail) AS user_name,
+      COALESCE(u.Department, c.department, 'General') AS department,
+      u.Role AS user_role,
+      p.course_id,
+      c.title AS course_title,
+      p.lesson_id,
+      l.title AS lesson_title,
+      l.duration_mins,
+      p.watch_seconds,
+      p.document_opened,
+      p.document_opened_at,
+      p.status,
+      p.last_heartbeat,
+      TIMESTAMPDIFF(SECOND, p.last_heartbeat, NOW()) AS seconds_ago
+    FROM mis_lms_progress p
+    LEFT JOIN mis_lms_courses c ON c.id = p.course_id
+    LEFT JOIN mis_lms_lessons l ON l.id = p.lesson_id
+    LEFT JOIN mis_user_data u ON LOWER(u.User_Mail) = LOWER(p.user_mail)
+    WHERE p.last_heartbeat >= NOW() - INTERVAL 120 SECOND
+    ORDER BY p.last_heartbeat DESC
+  `;
+
+  // Query 2: Member aggregated course progress
+  let progressSql = `
+    SELECT 
+      p.user_mail,
+      COALESCE(u.User_Name, p.user_name, p.user_mail) AS user_name,
+      COALESCE(u.Department, c.department, 'General') AS department,
+      u.Role AS user_role,
+      c.id AS course_id,
+      c.title AS course_title,
+      c.department AS course_department,
+      COUNT(DISTINCT p.lesson_id) AS lessons_viewed,
+      SUM(CASE WHEN p.status = 'completed' THEN 1 ELSE 0 END) AS lessons_completed,
+      (SELECT COUNT(*) FROM mis_lms_lessons WHERE course_id = c.id) AS total_course_lessons,
+      SUM(COALESCE(p.watch_seconds, 0)) AS total_watch_seconds,
+      SUM(CASE WHEN p.document_opened = 1 THEN 1 ELSE 0 END) AS docs_opened_count,
+      (SELECT COUNT(*) FROM mis_lms_lessons WHERE course_id = c.id AND document_url IS NOT NULL AND document_url != '') AS total_docs_available,
+      MAX(p.last_heartbeat) AS last_active_at,
+      TIMESTAMPDIFF(SECOND, MAX(p.last_heartbeat), NOW()) AS last_active_seconds_ago,
+      CASE WHEN TIMESTAMPDIFF(SECOND, MAX(p.last_heartbeat), NOW()) <= 120 THEN 1 ELSE 0 END AS is_online_now
+    FROM mis_lms_progress p
+    JOIN mis_lms_courses c ON c.id = p.course_id
+    LEFT JOIN mis_user_data u ON LOWER(u.User_Mail) = LOWER(p.user_mail)
+    WHERE 1=1
+  `;
+
+  const params = [];
+  if (department && department.trim() !== "") {
+    progressSql += " AND (c.department = ? OR u.Department = ?)";
+    params.push(department.trim(), department.trim());
+  }
+  if (course_id) {
+    progressSql += " AND c.id = ?";
+    params.push(course_id);
+  }
+  if (search && search.trim() !== "") {
+    progressSql += " AND (p.user_mail LIKE ? OR u.User_Name LIKE ? OR c.title LIKE ?)";
+    const term = `%${search.trim()}%`;
+    params.push(term, term, term);
+  }
+
+  progressSql += `
+    GROUP BY p.user_mail, c.id
+    ORDER BY is_online_now DESC, last_active_at DESC
+  `;
+
+  // Query 3: Detailed lesson-level logs
+  const detailsSql = `
+    SELECT 
+      p.id,
+      p.user_mail,
+      COALESCE(u.User_Name, p.user_name, p.user_mail) AS user_name,
+      COALESCE(u.Department, c.department, 'General') AS department,
+      c.id AS course_id,
+      c.title AS course_title,
+      l.id AS lesson_id,
+      l.title AS lesson_title,
+      l.duration_mins,
+      l.video_url,
+      l.document_name,
+      l.document_url,
+      p.status,
+      COALESCE(p.watch_seconds, 0) AS watch_seconds,
+      p.document_opened,
+      p.document_opened_at,
+      p.completed_at,
+      p.last_heartbeat,
+      CASE WHEN TIMESTAMPDIFF(SECOND, p.last_heartbeat, NOW()) <= 120 THEN 1 ELSE 0 END AS is_active_now
+    FROM mis_lms_progress p
+    JOIN mis_lms_courses c ON c.id = p.course_id
+    JOIN mis_lms_lessons l ON l.id = p.lesson_id
+    LEFT JOIN mis_user_data u ON LOWER(u.User_Mail) = LOWER(p.user_mail)
+    ORDER BY p.last_heartbeat DESC
+    LIMIT 250
+  `;
+
+  db.query(activeSql, (err1, activeRows) => {
+    if (err1) return res.json({ success: false, message: err1.message });
+
+    db.query(progressSql, params, (err2, progressRows) => {
+      if (err2) return res.json({ success: false, message: err2.message });
+
+      db.query(detailsSql, (err3, detailRows) => {
+        if (err3) return res.json({ success: false, message: err3.message });
+
+        res.json({
+          success: true,
+          currently_active: activeRows || [],
+          member_progress: progressRows || [],
+          lesson_details: detailRows || []
+        });
+      });
     });
   });
 });
