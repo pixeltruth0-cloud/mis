@@ -131,6 +131,257 @@ if (!process.env.DATABASE_URL) {
   };
   migrateCronTable();
 
+  // Programmatic migration to create LMS (Learning Management System) tables and seed initial courses
+  const migrateLMSTables = () => {
+    db.query(`
+      CREATE TABLE IF NOT EXISTS \`mis_lms_courses\` (
+        \`id\` INT NOT NULL AUTO_INCREMENT,
+        \`department\` VARCHAR(100) NOT NULL,
+        \`title\` VARCHAR(255) NOT NULL,
+        \`description\` TEXT,
+        \`thumbnail_url\` VARCHAR(500),
+        \`badge_text\` VARCHAR(50) DEFAULT 'Core Workflow',
+        \`target_role\` VARCHAR(100) DEFAULT 'All',
+        \`is_active\` TINYINT DEFAULT 1,
+        \`created_by\` VARCHAR(255) DEFAULT 'Super Admin',
+        \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`)
+      )
+    `, (err) => {
+      if (err) console.error("❌ Error migrating mis_lms_courses table:", err);
+      else {
+        console.log("✅ DB schema verification complete for mis_lms_courses.");
+
+        db.query(`
+          CREATE TABLE IF NOT EXISTS \`mis_lms_lessons\` (
+            \`id\` INT NOT NULL AUTO_INCREMENT,
+            \`course_id\` INT NOT NULL,
+            \`order_index\` INT DEFAULT 1,
+            \`title\` VARCHAR(255) NOT NULL,
+            \`duration_mins\` INT DEFAULT 15,
+            \`video_url\` VARCHAR(1000),
+            \`document_name\` VARCHAR(255),
+            \`document_url\` VARCHAR(1000),
+            \`content_html\` LONGTEXT,
+            \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (\`id\`)
+          )
+        `, (lErr) => {
+          if (lErr) console.error("❌ Error migrating mis_lms_lessons table:", lErr);
+          else {
+            console.log("✅ DB schema verification complete for mis_lms_lessons.");
+
+            db.query(`
+              CREATE TABLE IF NOT EXISTS \`mis_lms_progress\` (
+                \`id\` INT NOT NULL AUTO_INCREMENT,
+                \`user_mail\` VARCHAR(255) NOT NULL,
+                \`course_id\` INT NOT NULL,
+                \`lesson_id\` INT NOT NULL,
+                \`status\` VARCHAR(50) DEFAULT 'completed',
+                \`completed_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (\`id\`),
+                UNIQUE KEY \`unique_user_lesson\` (\`user_mail\`, \`lesson_id\`)
+              )
+            `, (pErr) => {
+              if (pErr) console.error("❌ Error migrating mis_lms_progress table:", pErr);
+              else {
+                console.log("✅ DB schema verification complete for mis_lms_progress.");
+                seedDefaultLMSCourses();
+              }
+            });
+          }
+        });
+      }
+    });
+  };
+
+  const seedDefaultLMSCourses = () => {
+    db.query("SELECT COUNT(*) as count FROM mis_lms_courses", (err, rows) => {
+      if (err || !rows || rows[0].count > 0) return;
+
+      console.log("ℹ️ Seeding default LMS training courses for Pixeltruth teams...");
+
+      const defaultCourses = [
+        {
+          department: "Media_Monitoring",
+          title: "Media Monitoring: End-to-End Shift Operations & Keyword Tracking",
+          description: "Complete operational walkthrough on real-time news monitoring, keyword filtering, social listening, sentiment tagging, and daily shift MIS filing.",
+          badge_text: "Core Workflow",
+          target_role: "All",
+          thumbnail_url: "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=600&q=80",
+          lessons: [
+            {
+              title: "Shift Setup, Portal Overview & Tool Logins",
+              duration_mins: 15,
+              video_url: "https://www.youtube.com/watch?v=LXb3EKWsInQ",
+              document_name: "Media_Monitoring_Morning_Setup_Checklist.pdf",
+              document_url: "https://pixeltruth.com/mis/assets/docs/media_monitoring_setup.pdf",
+              content_html: `<h3>Daily Shift Setup</h3><p>Ensure you complete the following steps before initiating your monitoring run:</p><ul><li>Log into the Media Monitoring Dashboard with your assigned shift credentials.</li><li>Verify platform connectivity across news portals, social aggregators, and RSS feeds.</li><li>Review urgent alerts from the previous shift handoff notes.</li><li>Ensure MIS daily attendance status is recorded accurately.</li></ul>`
+            },
+            {
+              title: "Keyword Filtering, Sentiment Tagging & Threat Escalation",
+              duration_mins: 25,
+              video_url: "https://www.youtube.com/watch?v=ysz5S6PUM-U",
+              document_name: "Keyword_Taxonomy_&_Sentiment_Rules_v2.pdf",
+              document_url: "https://pixeltruth.com/mis/assets/docs/keyword_taxonomy.pdf",
+              content_html: `<h3>Sentiment Analysis Guidelines</h3><p>Tag content using the three standardized tiers:</p><ol><li><strong>Positive / Neutral:</strong> Standard corporate mentions, routine press releases, industry news.</li><li><strong>Critical / High Risk:</strong> Defamation, unverified customer complaints gaining virality, brand infringement threats.</li><li><strong>Immediate Escalation:</strong> Regulatory alerts, major executive impersonation, stock price manipulation news.</li></ol>`
+            },
+            {
+              title: "Daily Report Compilation & End-of-Day MIS Filing",
+              duration_mins: 20,
+              video_url: "https://www.youtube.com/watch?v=ScMzIvxBSi4",
+              document_name: "EOD_MIS_Filing_Template_Guide.pdf",
+              document_url: "https://pixeltruth.com/mis/assets/docs/eod_mis_guide.pdf",
+              content_html: `<h3>Filing Your Daily Shift Report</h3><p>To ensure 100% compliance on the Super Admin control tower:</p><ul><li>Record actual active working hours (maximum standard workday is 8.0 hours).</li><li>Verify work counts: live mentions, filtered alerts, and flagged incidents.</li><li>Submit before the scheduled end-of-shift cutoff (8:00 PM IST for Day shift).</li></ul>`
+            }
+          ]
+        },
+        {
+          department: "Brand_Infringement",
+          title: "Brand Infringement: Detection, Enforcement & Counterfeiting SOP",
+          description: "Master trademark infringement detection, fake storefront identification, unauthorized sellers, counterfeit physical & digital goods, and enforcement escalation.",
+          badge_text: "Enforcement SOP",
+          target_role: "All",
+          thumbnail_url: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+          lessons: [
+            {
+              title: "Counterfeit & Copyright Infringement Identification",
+              duration_mins: 20,
+              video_url: "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+              document_name: "Brand_Infringement_Classification_Manual.pdf",
+              document_url: "https://pixeltruth.com/mis/assets/docs/infringement_manual.pdf",
+              content_html: `<h3>Infringement Typologies</h3><p>We monitor multiple threat vectors:</p><ul><li><strong>Lookalike Domains (Typosquatting):</strong> Domains targeting brand misspellings to phish users.</li><li><strong>Unauthorized Marketplace Listings:</strong> Counterfeit items sold below MSRP without brand authorization.</li><li><strong>Trademark Logo Misuse:</strong> Unauthorized use of brand insignia on third-party marketing materials.</li></ul>`
+            },
+            {
+              title: "Live Customer Auditing & POC Verification Protocol",
+              duration_mins: 30,
+              video_url: "https://www.youtube.com/watch?v=kJQP7kiw5Fk",
+              document_name: "POC_Escalation_Matrix_&_Evidence_Gathering.pdf",
+              document_url: "https://pixeltruth.com/mis/assets/docs/poc_escalation.pdf",
+              content_html: `<h3>Evidence Collection Procedure</h3><p>Never flag an incident without tamper-proof proof:</p><ol><li>Capture full-page archived screenshots using the Pixeltruth Screenshot Extension.</li><li>Extract seller metadata, platform seller ID, and redirection chain URLs.</li><li>Log the case with proper severity in the Brand Infringement MIS portal.</li></ol>`
+            }
+          ]
+        },
+        {
+          department: "Social_Media_N_Website_Audit",
+          title: "Social Media & Website Audit: Quality Standards & Brand Safety",
+          description: "End-to-end operational guide on scanning websites, checking stationary & real-estate campaigns, verifying compliance parameters, and auditing social handles.",
+          badge_text: "Audit Operations",
+          target_role: "All",
+          thumbnail_url: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?auto=format&fit=crop&w=600&q=80",
+          lessons: [
+            {
+              title: "Website Audit Checklist & Quality Parameter Verification",
+              duration_mins: 25,
+              video_url: "https://www.youtube.com/watch?v=2vjPBrBU-TM",
+              document_name: "Website_Audit_Standard_Operating_Procedure.pdf",
+              document_url: "https://pixeltruth.com/mis/assets/docs/website_audit_sop.pdf",
+              content_html: `<h3>Website Audit Parameters</h3><p>Every assigned URL must undergo verification on:</p><ul><li>Domain Registration & SSL Integrity.</li><li>Ad Placement compliance (checking for intrusive ads, misleading CTA buttons).</li><li>Content compliance: verify no unauthorized brand imagery or affiliate cloaking is present.</li></ul>`
+            },
+            {
+              title: "Social Media Handles, Campaigns & Platform Checks",
+              duration_mins: 20,
+              video_url: "https://www.youtube.com/watch?v=tgbNymZ7vqY",
+              document_name: "Social_Media_Campaign_Verification_Guide.pdf",
+              document_url: "https://pixeltruth.com/mis/assets/docs/social_media_guide.pdf",
+              content_html: `<h3>Social Platform Scans</h3><p>Standard audit points for Instagram, Facebook, and Telegram channels:</p><ol><li>Verify handle authenticity and blue badge status.</li><li>Audit promotional links in bio/captions to uncover affiliate arbitrage.</li><li>Record hours spent per task accurately under the daily filing system.</li></ol>`
+            }
+          ]
+        },
+        {
+          department: "Anti_Money_Laundering",
+          title: "Anti Money Laundering (AML): Case Investigation & Risk Matrix",
+          description: "Comprehensive training for AML interns and executives on processing daily fraud cases, detecting suspicious UPI patterns, and filing QC verified audits.",
+          badge_text: "Risk & Compliance",
+          target_role: "All",
+          thumbnail_url: "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=600&q=80",
+          lessons: [
+            {
+              title: "AML Case Classification, Risk Tiers & Portal Overview",
+              duration_mins: 30,
+              video_url: "https://www.youtube.com/watch?v=3JZ_D3ELwOQ",
+              document_name: "AML_Risk_Matrix_&_Suspicious_Indicators.pdf",
+              document_url: "https://pixeltruth.com/mis/assets/docs/aml_risk_matrix.pdf",
+              content_html: `<h3>AML Case Investigation Standards</h3><p>Daily workflow instructions for AML analysts:</p><ul><li>Inspect transactional anomalies, high-frequency micro-payments, and rapid wallet drains.</li><li>Classify cases under UPI Fraud, Investment Web Scam, or Net Banking Credit Card fraud.</li><li>Ensure daily case target (minimum standard 40+ cases/day) is maintained.</li></ul>`
+            },
+            {
+              title: "Quality Control (QC) Standards & Verification Protocols",
+              duration_mins: 20,
+              video_url: "https://www.youtube.com/watch?v=L_LUpnjgPso",
+              document_name: "QC_Inspection_Checklist_&_Error_Minimization.pdf",
+              document_url: "https://pixeltruth.com/mis/assets/docs/qc_checklist.pdf",
+              content_html: `<h3>QC Approval Rules</h3><p>Cases submitted for QC review must satisfy:</p><ol><li>Evidence attachment present and legible.</li><li>No duplicate case IDs submitted in the same cycle.</li><li>Proper remarks added for any inconclusive or dismissed cases.</li></ol>`
+            }
+          ]
+        },
+        {
+          department: "Brand_Affiliate",
+          title: "Brand Affiliate & Ad Fraud: Cookie Stuffing & Traffic Arbitrage",
+          description: "Learn how to detect affiliate fraud, hidden redirects, cookie stuffing scripts, fraudulent PPC brand bidding, and unauthorized lead generation networks.",
+          badge_text: "Fraud Detection",
+          target_role: "All",
+          thumbnail_url: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=600&q=80",
+          lessons: [
+            {
+              title: "Detecting Cookie Stuffing & Affiliate Hijacking",
+              duration_mins: 25,
+              video_url: "https://www.youtube.com/watch?v=PT2_F-1esPk",
+              document_name: "Ad_Fraud_&_Affiliate_Stuffing_Guide.pdf",
+              document_url: "https://pixeltruth.com/mis/assets/docs/affiliate_fraud.pdf",
+              content_html: `<h3>Cookie Stuffing Mechanics</h3><p>Techniques employed by rogue affiliates:</p><ul><li>Zero-pixel iframes loading affiliate cookies without user consent.</li><li>Browser extensions silently overriding organic user shopping sessions.</li><li>Pop-under network scripts forcing affiliate attribution.</li></ul>`
+            }
+          ]
+        },
+        {
+          department: "General",
+          title: "Pixeltruth General Onboarding: Tools, MIS Filing & Standards",
+          description: "Essential company handbook covering daily shift rules, Slack communication protocols, leave applications, and strict MIS report submission expectations.",
+          badge_text: "Company Onboarding",
+          target_role: "All",
+          thumbnail_url: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=600&q=80",
+          lessons: [
+            {
+              title: "Welcome to Pixeltruth: Culture, Tools & Communication",
+              duration_mins: 15,
+              video_url: "https://www.youtube.com/watch?v=V-_O7nl0Ii0",
+              document_name: "Pixeltruth_Employee_Handbook_2026.pdf",
+              document_url: "https://pixeltruth.com/mis/assets/docs/employee_handbook.pdf",
+              content_html: `<h3>Welcome to the Team!</h3><p>Important tools and contacts:</p><ul><li><strong>Communication:</strong> Use official company Slack channels for daily coordination.</li><li><strong>Official Email:</strong> Always use your @pixeltruth.com corporate ID for customer and internal communication.</li><li><strong>Shift Hours:</strong> Standard full workday is 8.0 hours. Ensure punctual shift handover.</li></ul>`
+            },
+            {
+              title: "MIS Daily Task Reporting & Filing Rules",
+              duration_mins: 15,
+              video_url: "https://www.youtube.com/watch?v=J---aiyznGQ",
+              document_name: "MIS_Portal_User_Manual.pdf",
+              document_url: "https://pixeltruth.com/mis/assets/docs/mis_user_manual.pdf",
+              content_html: `<h3>MIS Submission Guidelines</h3><p>Critical rules monitored by Super Admin:</p><ol><li>Daily reports must be submitted every working day before the cutoff.</li><li>Never submit duplicate entries or inflate hours beyond standard shift limit.</li><li>If you face portal issues, escalate immediately to your assigned Team Lead.</li></ol>`
+            }
+          ]
+        }
+      ];
+
+      defaultCourses.forEach(c => {
+        const courseSql = `
+          INSERT INTO mis_lms_courses (department, title, description, thumbnail_url, badge_text, target_role, is_active, created_by)
+          VALUES (?, ?, ?, ?, ?, ?, 1, 'Super Admin')
+        `;
+        db.query(courseSql, [c.department, c.title, c.description, c.thumbnail_url, c.badge_text, c.target_role], (courseErr, res) => {
+          if (courseErr || !res) return;
+          const courseId = res.insertId;
+          c.lessons.forEach((l, idx) => {
+            const lessonSql = `
+              INSERT INTO mis_lms_lessons (course_id, order_index, title, duration_mins, video_url, document_name, document_url, content_html)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+            db.query(lessonSql, [courseId, idx + 1, l.title, l.duration_mins, l.video_url, l.document_name, l.document_url, l.content_html]);
+          });
+        });
+      });
+    });
+  };
+
+  migrateLMSTables();
+
   // 🔥 Error handling (VERY IMPORTANT)
   db.on("error", (err) => {
     console.error("❌ DB Pool Error:", err.message);
@@ -5798,7 +6049,229 @@ app.post("/deleteShiftTemplate", (req, res) => {
     });
 });
 
-/* ======================
+/* ===================================================
+   LMS (LEARNING MANAGEMENT SYSTEM) REST APIS
+=================================================== */
+
+// 1. GET ALL COURSES (WITH FILTERING & LESSON COUNTS)
+app.get("/getLMSCourses", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const { department, search } = req.query;
+  let sql = `
+    SELECT 
+      c.id,
+      c.department,
+      c.title,
+      c.description,
+      c.thumbnail_url,
+      c.badge_text,
+      c.target_role,
+      c.is_active,
+      c.created_at,
+      COUNT(l.id) AS total_lessons,
+      COALESCE(SUM(l.duration_mins), 0) AS total_duration_mins,
+      COUNT(CASE WHEN l.video_url IS NOT NULL AND l.video_url != '' THEN 1 END) AS total_videos,
+      COUNT(CASE WHEN l.document_url IS NOT NULL AND l.document_url != '' THEN 1 END) AS total_docs
+    FROM mis_lms_courses c
+    LEFT JOIN mis_lms_lessons l ON c.id = l.course_id
+    WHERE c.is_active = 1
+  `;
+  const params = [];
+
+  if (department && department.trim() && department !== "ALL") {
+    sql += " AND (LOWER(c.department) = LOWER(?) OR LOWER(REPLACE(c.department, '_', ' ')) = LOWER(?))";
+    params.push(department.trim(), department.trim().replace(/_/g, " "));
+  }
+
+  if (search && search.trim()) {
+    sql += " AND (c.title LIKE ? OR c.description LIKE ?)";
+    params.push(`%${search.trim()}%`, `%${search.trim()}%`);
+  }
+
+  sql += " GROUP BY c.id ORDER BY c.id ASC";
+
+  db.query(sql, params, (err, rows) => {
+    if (err) {
+      console.error("❌ LMS Courses fetch error:", err.message);
+      return res.json({ success: false, message: err.message });
+    }
+    res.json({ success: true, courses: rows });
+  });
+});
+
+// 2. GET SINGLE COURSE DETAIL WITH ALL LESSONS
+app.get("/getLMSCourseDetail", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const { course_id } = req.query;
+  if (!course_id) return res.json({ success: false, message: "course_id is required" });
+
+  db.query("SELECT * FROM mis_lms_courses WHERE id = ?", [course_id], (cErr, courseRows) => {
+    if (cErr || !courseRows.length) {
+      return res.json({ success: false, message: "Course not found" });
+    }
+
+    const course = courseRows[0];
+    db.query("SELECT * FROM mis_lms_lessons WHERE course_id = ? ORDER BY order_index ASC, id ASC", [course_id], (lErr, lessonRows) => {
+      if (lErr) return res.json({ success: false, message: lErr.message });
+
+      res.json({
+        success: true,
+        course,
+        lessons: lessonRows
+      });
+    });
+  });
+});
+
+// 3. ADD NEW COURSE
+app.post("/addLMSCourse", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const { department, title, description, thumbnail_url, badge_text, target_role, created_by } = req.body;
+  if (!title || !department) {
+    return res.json({ success: false, message: "Title and Department are required" });
+  }
+
+  const sql = `
+    INSERT INTO mis_lms_courses (department, title, description, thumbnail_url, badge_text, target_role, is_active, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+  `;
+  const values = [
+    department.trim(),
+    title.trim(),
+    description || "",
+    thumbnail_url || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80",
+    badge_text || "Core SOP",
+    target_role || "All",
+    created_by || "Super Admin"
+  ];
+
+  db.query(sql, values, (err, result) => {
+    if (err) return res.json({ success: false, message: err.message });
+    res.json({ success: true, course_id: result.insertId, message: "Course created successfully!" });
+  });
+});
+
+// 4. ADD LESSON TO COURSE
+app.post("/addLMSLesson", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const { course_id, title, duration_mins, video_url, document_name, document_url, content_html, order_index } = req.body;
+  if (!course_id || !title) {
+    return res.json({ success: false, message: "course_id and title are required" });
+  }
+
+  const sql = `
+    INSERT INTO mis_lms_lessons (course_id, order_index, title, duration_mins, video_url, document_name, document_url, content_html)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+  const values = [
+    Number(course_id),
+    Number(order_index || 1),
+    title.trim(),
+    Number(duration_mins || 15),
+    video_url || "",
+    document_name || "",
+    document_url || "",
+    content_html || ""
+  ];
+
+  db.query(sql, values, (err, result) => {
+    if (err) return res.json({ success: false, message: err.message });
+    res.json({ success: true, lesson_id: result.insertId, message: "Lesson added successfully!" });
+  });
+});
+
+// 5. UPDATE COURSE
+app.post("/updateLMSCourse", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const { id, department, title, description, thumbnail_url, badge_text, target_role } = req.body;
+  if (!id) return res.json({ success: false, message: "Course ID missing" });
+
+  const sql = `
+    UPDATE mis_lms_courses 
+    SET department = ?, title = ?, description = ?, thumbnail_url = ?, badge_text = ?, target_role = ?
+    WHERE id = ?
+  `;
+  db.query(sql, [department, title, description, thumbnail_url, badge_text, target_role, id], (err) => {
+    if (err) return res.json({ success: false, message: err.message });
+    res.json({ success: true, message: "Course updated successfully!" });
+  });
+});
+
+// 6. DELETE COURSE
+app.post("/deleteLMSCourse", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const { id } = req.body;
+  if (!id) return res.json({ success: false, message: "Course ID missing" });
+
+  db.query("DELETE FROM mis_lms_lessons WHERE course_id = ?", [id], () => {
+    db.query("DELETE FROM mis_lms_courses WHERE id = ?", [id], (cErr) => {
+      if (cErr) return res.json({ success: false, message: cErr.message });
+      res.json({ success: true, message: "Course and lessons deleted successfully!" });
+    });
+  });
+});
+
+// 7. DELETE LESSON
+app.post("/deleteLMSLesson", (req, res) => {
+  if (!db) return res.json({ success: false, message: "DB not connected" });
+
+  const { id } = req.body;
+  if (!id) return res.json({ success: false, message: "Lesson ID missing" });
+
+  db.query("DELETE FROM mis_lms_lessons WHERE id = ?", [id], (err) => {
+    if (err) return res.json({ success: false, message: err.message });
+    res.json({ success: true, message: "Lesson deleted successfully!" });
+  });
+});
+
+// 8. UPDATE PROGRESS (MARK COMPLETED)
+app.post("/updateLMSProgress", (req, res) => {
+  if (!db) return res.json({ success: false });
+
+  const { user_mail, course_id, lesson_id } = req.body;
+  if (!user_mail || !lesson_id) return res.json({ success: false });
+
+  const sql = `
+    INSERT INTO mis_lms_progress (user_mail, course_id, lesson_id, status)
+    VALUES (?, ?, ?, 'completed')
+    ON DUPLICATE KEY UPDATE status = 'completed', completed_at = CURRENT_TIMESTAMP
+  `;
+  db.query(sql, [user_mail.toLowerCase().trim(), course_id || 0, lesson_id], (err) => {
+    if (err) return res.json({ success: false, message: err.message });
+    res.json({ success: true, message: "Lesson marked as completed!" });
+  });
+});
+
+// 9. GET USER PROGRESS
+app.get("/getLMSProgress", (req, res) => {
+  if (!db) return res.json({ success: true, completed_lessons: [] });
+
+  const { user_mail, course_id } = req.query;
+  if (!user_mail) return res.json({ success: true, completed_lessons: [] });
+
+  let sql = "SELECT lesson_id FROM mis_lms_progress WHERE LOWER(user_mail) = LOWER(?)";
+  const params = [user_mail.trim()];
+
+  if (course_id) {
+    sql += " AND course_id = ?";
+    params.push(course_id);
+  }
+
+  db.query(sql, params, (err, rows) => {
+    if (err) return res.json({ success: true, completed_lessons: [] });
+    res.json({
+      success: true,
+      completed_lessons: rows.map(r => r.lesson_id)
+    });
+  });
+});
+
 /* ======================
    Server Start
 ====================== */
